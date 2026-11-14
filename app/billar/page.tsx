@@ -75,6 +75,56 @@ function createSchedule(players:Player[],usedPairs:Set<string>=new Set(),initial
   return ordered;
 }
 
+function chooseBalancedRounds(schedule:Pairing[],count:number,players:Player[],initialPlayed:Map<string,number>=new Map()):Pairing[] {
+  if(count>=schedule.length)return schedule;
+  const base=players.map(p=>initialPlayed.get(p.id)||0);
+  let bestSpread=Infinity,bestVariance=Infinity,best:Pairing[][]=[];
+  const selected:Pairing[]=[];
+  const counts=[...base];
+  const playerIndex=new Map(players.map((p,i)=>[p.id,i]));
+  function evaluate(){
+    const min=Math.min(...counts),max=Math.max(...counts);
+    const mean=counts.reduce((sum,v)=>sum+v,0)/Math.max(1,counts.length);
+    const variance=counts.reduce((sum,v)=>sum+(v-mean)*(v-mean),0);
+    if(max-min<bestSpread||(max-min===bestSpread&&variance<bestVariance-1e-9)){
+      bestSpread=max-min;bestVariance=variance;best=[ [...selected] ];
+    }else if(max-min===bestSpread&&Math.abs(variance-bestVariance)<1e-9&&best.length<100){
+      best.push([...selected]);
+    }
+  }
+  function search(from:number){
+    if(selected.length===count){evaluate();return;}
+    if(schedule.length-from<count-selected.length)return;
+    for(let i=from;i<=schedule.length-(count-selected.length);i++){
+      const round=schedule[i];selected.push(round);
+      [...round.a,...round.b].forEach(id=>{const ix=playerIndex.get(id);if(ix!==undefined)counts[ix]++;});
+      search(i+1);
+      [...round.a,...round.b].forEach(id=>{const ix=playerIndex.get(id);if(ix!==undefined)counts[ix]--;});
+      selected.pop();
+    }
+  }
+  // Exhaustive selection is practical for the current tournament sizes.
+  if(schedule.length<=24)search(0);
+  if(best.length)return best[Math.floor(Math.random()*best.length)];
+  // Fallback for unusually large schedules: greedily pick the most balanced next round.
+  const remaining=[...schedule],chosen:Pairing[]=[];
+  while(chosen.length<count){
+    let bestIndex=0,bestScore=Infinity;
+    remaining.forEach((round,i)=>{
+      const next=[...counts];
+      [...round.a,...round.b].forEach(id=>{const ix=playerIndex.get(id);if(ix!==undefined)next[ix]++;});
+      const spread=Math.max(...next)-Math.min(...next);
+      const mean=next.reduce((sum,v)=>sum+v,0)/Math.max(1,next.length);
+      const variance=next.reduce((sum,v)=>sum+(v-mean)*(v-mean),0);
+      const score=spread*100000+variance;
+      if(score<bestScore){bestScore=score;bestIndex=i;}
+    });
+    const round=remaining.splice(bestIndex,1)[0];chosen.push(round);
+    [...round.a,...round.b].forEach(id=>{const ix=playerIndex.get(id);if(ix!==undefined)counts[ix]++;});
+  }
+  return chosen;
+}
+
 export default function BilliardsPage(){
   const [players,setPlayers]=useState<Player[]>([]);
   const [globalPlayers,setGlobalPlayers]=useState<{id:string;name:string}[]>([]);
@@ -213,7 +263,7 @@ export default function BilliardsPage(){
     if(append)matches.forEach(m=>[...m.a,...m.b].forEach(id=>initialPlayed.set(id,(initialPlayed.get(id)||0)+1)));
     const schedule=createSchedule(players,usedPairs,initialPlayed);
     if(!schedule.length){setBusy(false);setNotice("No queden rondes possibles sense repetir parelles.");return;}
-    const generated=schedule.slice(0,Math.min(count,schedule.length));
+    const generated=chooseBalancedRounds(schedule,Math.min(count,schedule.length),players,initialPlayed);
     if(generated.length<count){setBusy(false);setNotice("Només es poden afegir "+schedule.length+" rondes més sense repetir parelles.");return;}
     const roundNumbers=generated.map((_,i)=>offset+i+1);
     const {data:roundRows,error:roundError}=await db.from("tournament_rounds").insert(generated.map((_,i)=>({tournament_id:TOURNAMENT_ID,round_number:roundNumbers[i],status:"scheduled"}))).select("id,round_number");
