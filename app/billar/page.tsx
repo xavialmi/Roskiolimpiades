@@ -47,8 +47,10 @@ function createPairing(players:Player[],matches:Match[]):Pairing|null {
           if((old.a.includes(x.id)&&old.b.includes(y.id))||(old.b.includes(x.id)&&old.a.includes(y.id)))repeatedOpponents++;
         }
       }
-      // Primer equilibra el nombre de partits; després evita repetir torn, parella i rivals.
-      const cost=spread*1000000+imbalance*10000+consecutive*1000+repeatedPartners*100+repeatedOpponents*10;
+      // Una parella repetida no és una opció: es descarta completament.
+      if(repeatedPartners>0)continue;
+      // Entre opcions sense repetir companys, equilibra partits, torns i rivals.
+      const cost=spread*1000000+imbalance*10000+consecutive*1000+repeatedOpponents*10;
       const tie=Math.random();
       const pairing:Pairing={a:[teamA[0].id,teamA[1].id],b:[teamB[0].id,teamB[1].id],rests:players.filter(p=>!selectedIds.has(p.id)).map(p=>p.id)};
       if(!best||cost<best.cost||(cost===best.cost&&tie>best.tie))best={pairing,cost,tie};
@@ -197,6 +199,7 @@ export default function BilliardsPage(){
       simulated=simulated.map(x=>({...x,rests:x.rests+(p.rests.includes(x.id)?1:0),played:x.played+([...p.a,...p.b].includes(x.id)?1:0)}));
       historical.push({id:"sim-"+n,round:(historical.at(-1)?.round||0)+1,roundId:"",a:p.a,b:p.b,scoreA:0,scoreB:0,winner:null,blackEarly:false,blackTeam:null,done:false});
     }
+    if(generated.length<count){setBusy(false);setNotice("No es poden completar totes les rondes sense repetir parelles. Amb "+players.length+" participants només es poden generar "+generated.length+" rondes amb parelles úniques. Redueix el nombre de rondes o afegeix participants.");return;}
     if(!generated.length){setBusy(false);setNotice("No s'han pogut generar rondes amb aquests participants.");return;}
     const {data:roundRows,error:roundError}=await db.from("tournament_rounds").insert(generated.map((_,i)=>({tournament_id:TOURNAMENT_ID,round_number:i+1,status:"scheduled"}))).select("id,round_number");
     if(roundError||!roundRows){setBusy(false);setNotice(roundError?.message||"No s'han pogut crear les rondes.");return;}
