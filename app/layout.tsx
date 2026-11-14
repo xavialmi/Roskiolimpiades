@@ -6,7 +6,6 @@ export const metadata: Metadata = {
   manifest: '/manifest.webmanifest',
   icons: {
     icon: [{ url: '/roskiolimpiades-icon.svg', type: 'image/svg+xml' }],
-    apple: [{ url: '/apple-touch-icon.png?v=3', type: 'image/png', sizes: '180x180' }],
     shortcut: [{ url: '/roskiolimpiades-icon.svg', type: 'image/svg+xml' }],
   },
 };
