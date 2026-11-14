@@ -44,6 +44,8 @@ export default function Home() {
   const [loginBusy, setLoginBusy] = useState(false);
   const [signupBusy, setSignupBusy] = useState(false);
   const [newParticipant, setNewParticipant] = useState("");
+  const [editingParticipantId, setEditingParticipantId] = useState<string | null>(null);
+  const [editingParticipantName, setEditingParticipantName] = useState("");
   const [newGame, setNewGame] = useState("");
   const [newTeam, setNewTeam] = useState("");
   const [notice, setNotice] = useState("");
@@ -147,6 +149,18 @@ export default function Home() {
     const { error } = await db.from("participants").insert({ display_name: name });
     if (error) setNotice(error.message); else { setNewParticipant(""); setNotice("Participant afegit."); await load(); }
   }
+  async function saveParticipant(id: string) {
+    const db = getSupabase();
+    const name = editingParticipantName.trim();
+    if (!db || !isAdmin || !name) return;
+    setNotice("");
+    const { error } = await db.from("participants").update({ display_name: name, updated_at: new Date().toISOString() }).eq("id", id).select("id").single();
+    if (error) { setNotice("No s'ha pogut actualitzar el participant: " + error.message); return; }
+    setEditingParticipantId(null);
+    setEditingParticipantName("");
+    setNotice("Participant actualitzat correctament.");
+    await load();
+  }
   async function addGame() {
     const db = getSupabase(); const name = newGame.trim(); if (!db || !name || !isAdmin) return;
     const slug = name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -217,14 +231,14 @@ export default function Home() {
     {tab === "participants" && <section className="page-content">
       <div className="page-title"><span className="eyebrow">LA COMUNITAT</span><h1>Tots els <em>participants.</em></h1><p>Un únic registre per a totes les competicions. No cal crear un compte per aparèixer al rànquing.</p></div>
       <div className="participant-summary"><strong>{participants.length}</strong><span>participants registrats</span></div>
-      <div className="participant-grid">{participants.map((p,i)=><div className="participant-card" key={p.id}><span className="avatar avatar-large">{p.display_name.slice(0,1).toUpperCase()}</span><div><b>{p.display_name}</b><small>Participant #{String(i+1).padStart(3,"0")}</small></div></div>)}</div>
+      <div className="participant-grid">{participants.map((p,i)=><div className="participant-card" key={p.id}><span className="avatar avatar-large">{(editingParticipantId===p.id?editingParticipantName:p.display_name).slice(0,1).toUpperCase()}</span><div className="participant-card-info">{editingParticipantId===p.id?<input className="participant-edit-input" aria-label="Nom del participant" value={editingParticipantName} onChange={e=>setEditingParticipantName(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")void saveParticipant(p.id);}}/>:<b>{p.display_name}</b>}<small>Participant #{String(i+1).padStart(3,"0")}</small></div>{isAdmin&&<div className="participant-edit-actions">{editingParticipantId===p.id?<><button className="text-button" onClick={()=>void saveParticipant(p.id)} disabled={!editingParticipantName.trim()}>Desar</button><button className="text-button" onClick={()=>setEditingParticipantId(null)}>Cancel·lar</button></>:<button className="text-button" onClick={()=>{setEditingParticipantId(p.id);setEditingParticipantName(p.display_name);}}>Editar</button>}</div>}</div>)}</div>
       {participants.length===0 && <div className="empty-state">Encara no hi ha participants. L'organitzador podrà afegir-los des de Gestió.</div>}
     </section>}
 
     {tab === "gestio" && <section className="page-content">
       <div className="page-title"><span className="eyebrow">ZONA PRIVADA</span><h1>Panell de <em>gestió.</em></h1><p>Només l'organització pot modificar participants, jocs, equips i resultats.</p></div>
       {!session ? <form className="login-card" onSubmit={signIn}><h2>Accés d'organitzador</h2><label>Correu electrònic<input value={email} onChange={e=>setEmail(e.target.value)} type="email" required placeholder="organitzador@exemple.com"/></label><label>Contrasenya<input value={password} onChange={e=>setPassword(e.target.value)} type="password" required placeholder="Contrasenya"/></label><button className="button button-primary" disabled={loginBusy}>{loginBusy?"Entrant…":"Iniciar sessió"}</button><button type="button" className="button button-secondary" disabled={signupBusy||loginBusy} onClick={createOrganizerAccount}>{signupBusy?"Creant compte…":"Crear el meu compte d'organitzador"}</button><small>El primer compte està restringit al correu autoritzat. No hi ha registre públic general.</small></form> : !isAdmin ? <div className="login-card"><h2>Falten permisos</h2><p>Aquest usuari ha d'obtenir el rol d'organitzador (app_metadata.role = admin) a Supabase.</p><button className="button button-secondary" onClick={signOut}>Tancar sessió</button></div> : <div className="management-grid">
-        <div className="management-card"><div className="section-heading"><h2>Participants</h2><span>{participants.length}</span></div><div className="inline-form"><input value={newParticipant} onChange={e=>setNewParticipant(e.target.value)} placeholder="Nom i cognoms"/><button onClick={addParticipant}>Afegir</button></div><small>Registre global compartit per tots els jocs.</small></div>
+        <div className="management-card"><div className="section-heading"><h2>Participants</h2><span>{participants.length}</span></div><div className="inline-form"><input value={newParticipant} onChange={e=>setNewParticipant(e.target.value)} placeholder="Nom i cognoms"/><button onClick={addParticipant}>Afegir</button></div><div className="management-participant-list">{participants.map(p=><div className="management-participant" key={p.id}>{editingParticipantId===p.id?<><input className="participant-edit-input" aria-label="Nom del participant" value={editingParticipantName} onChange={e=>setEditingParticipantName(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")void saveParticipant(p.id);}}/><button onClick={()=>void saveParticipant(p.id)} disabled={!editingParticipantName.trim()}>Desar</button><button className="button button-secondary" onClick={()=>setEditingParticipantId(null)}>×</button></>:<><span>{p.display_name}</span><button className="text-button" onClick={()=>{setEditingParticipantId(p.id);setEditingParticipantName(p.display_name);}}>Editar</button></>}</div>)}</div><small>Registre global compartit per tots els jocs. Els canvis de nom es reflecteixen a tots els tornejos.</small></div>
         <div className="management-card"><div className="section-heading"><h2>Jocs</h2><span>{games.length}</span></div><div className="inline-form"><input value={newGame} onChange={e=>setNewGame(e.target.value)} placeholder="Nom del nou joc"/><button onClick={addGame}>Crear</button></div><small>Els jocs nous quedaran disponibles al catàleg.</small></div>
         <div className="management-card"><div className="section-heading"><h2>Equips</h2><span>{teams.length}</span></div><div className="inline-form"><input value={newTeam} onChange={e=>setNewTeam(e.target.value)} placeholder="Nom de l'equip"/><button onClick={addTeam}>Crear</button></div><small>Els equips conserven identitat i historial; els punts sempre van a les persones.</small></div>
         <div className="management-card"><div className="section-heading"><h2>Edicions</h2><span>{editions.length}</span></div>{editions.map(e=><p key={e.id}>{e.name}</p>)}<small>La classificació històrica no es reinicia mai.</small></div>
