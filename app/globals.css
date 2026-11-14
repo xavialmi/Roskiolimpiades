@@ -24,3 +24,23 @@
 .app .edit-name{min-width:0;max-width:220px;padding:7px 9px}
 .app .mini.remove{color:#ff9a88}
 @media(max-width:520px){.app .picker-list{grid-template-columns:1fr}.app .person{align-items:flex-start}.app .person-actions{gap:4px}.app .person-actions .mini{font-size:12px}}
+
+
+/* Selecció múltiple i edició de participants del billar */
+.shell .participant-picker{border:1px solid var(--line);border-radius:14px;padding:13px;margin:12px 0 16px;background:#111712}
+.shell .picker-actions,.shell .person-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.shell .picker-actions{justify-content:space-between;margin-bottom:10px}
+.shell .picker-actions>div{display:flex;gap:7px}
+.shell .picker-actions b{font-size:14px}
+.shell .picker-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;max-height:260px;overflow:auto}
+.shell .picker-option{display:flex;align-items:center;gap:9px;min-width:0;padding:10px;border:1px solid #303a30;border-radius:10px;background:#171e18;font-size:13px}
+.shell .picker-option input{width:18px;height:18px;accent-color:var(--lime);flex:none}
+.shell .picker-option span{overflow-wrap:anywhere}
+.shell .picker-submit{width:100%;margin-top:12px}
+.shell .person{align-items:center;gap:12px}
+.shell .person-main{min-width:0;display:grid;gap:5px}
+.shell .person-main b{overflow-wrap:anywhere}
+.shell .person-actions{justify-content:flex-end}
+.shell .edit-name{min-width:0;max-width:220px;padding:7px 9px}
+.shell .mini.remove{color:#ff9a88}
+@media(max-width:520px){.shell .picker-list{grid-template-columns:1fr}.shell .person{align-items:flex-start}.shell .person-actions{gap:4px}.shell .person-actions .mini{font-size:12px}}
