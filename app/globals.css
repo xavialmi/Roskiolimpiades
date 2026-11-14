@@ -85,3 +85,17 @@ html,body{width:100%;max-width:100%;overflow-x:hidden}
   .app .standing .metric{min-width:42px}
   .app .bottom-dock{width:calc(100% - 20px);max-width:760px;left:50%;transform:translateX(-50%)}
 }
+
+
+/* Correcció definitiva de l'amplada i jerarquia de la pantalla de billar */
+.app{width:100%;max-width:1180px;margin-inline:auto;min-width:0}
+@media(max-width:760px){
+  .app{width:100vw;max-width:100vw;margin-left:calc(50% - 50vw);margin-right:calc(50% - 50vw);padding:16px 14px calc(130px + env(safe-area-inset-bottom))}
+  .app>.grid{display:flex;flex-direction:column;min-width:0}
+  .app>.grid>section:nth-child(2){order:-1}
+  .app>.grid>section{width:100%;min-width:0}
+  .app .roundhead{gap:8px;flex-wrap:wrap}
+  .app .roundhead h3{min-width:0}
+  .app .danger{background:#48241f;color:#ffd0c8;border:1px solid #8b453a}
+  .app .round-actions{display:flex;gap:8px;flex-wrap:wrap}
+}
