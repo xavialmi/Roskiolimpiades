@@ -188,14 +188,13 @@ export default function BilliardsPage(){
     setBusy(true);setNotice("");
     let simulated=players.map(p=>({...p}));
     const generated:Pairing[]=[];
-    const historical:Match[]=[];
+    const historical:Match[]=[...matches].sort((a,b)=>a.round-b.round);
     for(let n=0;n<count;n++){
       const p=createPairing(simulated,historical);
       if(!p)break;
       generated.push(p);
-      const used=new Set([...p.a,...p.b]);
-      simulated=simulated.map(x=>({...x,rests:x.rests+(p.rests.includes(x.id)?1:0)}));
-      historical.push({id:"sim-"+n,round:n+1,roundId:"",a:p.a,b:p.b,scoreA:0,scoreB:0,winner:null,blackEarly:false,blackTeam:null,done:false});
+      simulated=simulated.map(x=>({...x,rests:x.rests+(p.rests.includes(x.id)?1:0),played:x.played+([...p.a,...p.b].includes(x.id)?1:0)}));
+      historical.push({id:"sim-"+n,round:(historical.at(-1)?.round||0)+1,roundId:"",a:p.a,b:p.b,scoreA:0,scoreB:0,winner:null,blackEarly:false,blackTeam:null,done:false});
     }
     if(!generated.length){setBusy(false);setNotice("No s'han pogut generar rondes amb aquests participants.");return;}
     const {data:roundRows,error:roundError}=await db.from("tournament_rounds").insert(generated.map((_,i)=>({tournament_id:TOURNAMENT_ID,round_number:i+1,status:"scheduled"}))).select("id,round_number");
