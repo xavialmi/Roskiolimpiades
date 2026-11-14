@@ -14,8 +14,9 @@ const pairKey=(a:string,b:string)=>[a,b].sort().join(":");
 
 function createPairing(players:Player[],matches:Match[]):Pairing|null {
   if(players.length<4)return null;
-  const min=Math.min(...players.map(p=>p.rests));
-  const pool=players.filter(p=>p.rests<=min+1);
+  const ordered=[...players].sort((a,b)=>a.rests-b.rests);
+  const threshold=ordered[3].rests;
+  const pool=players.filter(p=>p.rests<=threshold);
   let best:{chosen:Player[];teams:[Player[],Player[]];cost:number}|null=null;
   for(let k=0;k<900;k++){
     const chosen=shuffle(pool).slice(0,4);
