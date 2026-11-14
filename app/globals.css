@@ -44,3 +44,16 @@
 .shell .edit-name{min-width:0;max-width:220px;padding:7px 9px}
 .shell .mini.remove{color:#ff9a88}
 @media(max-width:520px){.shell .picker-list{grid-template-columns:1fr}.shell .person{align-items:flex-start}.shell .person-actions{gap:4px}.shell .person-actions .mini{font-size:12px}}
+
+
+/* Edició del registre global de participants */
+.participant-card{gap:12px}
+.participant-card-info{min-width:0;flex:1;display:flex;flex-direction:column;gap:4px}
+.participant-card-info b{overflow-wrap:anywhere}
+.participant-edit-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.participant-edit-input{width:100%;min-width:0;max-width:260px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:#111712;color:inherit;font:inherit}
+.management-participant-list{display:grid;gap:8px;margin:14px 0}
+.management-participant{display:flex;align-items:center;gap:8px;justify-content:space-between;min-width:0;padding:9px 0;border-bottom:1px solid var(--line)}
+.management-participant>span{min-width:0;overflow-wrap:anywhere;flex:1}
+.management-participant .participant-edit-input{flex:1}
+@media(max-width:520px){.participant-card{align-items:flex-start}.participant-edit-actions{justify-content:flex-end}.management-participant{flex-wrap:wrap}}
