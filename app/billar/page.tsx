@@ -22,8 +22,8 @@ function combinations<T,>(items:T[],size:number):T[][] {
   return result;
 }
 
-function createSchedule(players:Player[]):Pairing[] {
-  const edges=combinations(players,2).map(pair=>[pair[0].id,pair[1].id] as [string,string]);
+function createSchedule(players:Player[],usedPairs:Set<string>=new Set()):Pairing[] {
+  const edges=combinations(players,2).map(pair=>[pair[0].id,pair[1].id] as [string,string]).filter(pair=>!usedPairs.has(pairKey(pair[0],pair[1])));
   const n=edges.length;
   const memo=new Set<string>();
   function solve(remaining:number[]):[number,number][]|null {
@@ -184,21 +184,25 @@ export default function BilliardsPage(){
     if(error)setNotice(error.message);else await load();
   }
 
-  async function generateRounds(count:number){
-    if(!isAdmin||players.length<4||started||count<1)return;
+  async function generateRounds(count:number,append=false){
+    if(!isAdmin||players.length<4||(!append&&started)||(append&&!started)||count<1||busy)return;
+    const offset=append?rounds.length:0;
     setBusy(true);setNotice("");
-    const schedule=createSchedule(players);
-    if(!schedule.length){setBusy(false);setNotice("No s'ha pogut construir un calendari sense repetir parelles. Torna-ho a provar.");return;}
+    const usedPairs=new Set<string>();
+    if(append)matches.forEach(m=>{usedPairs.add(pairKey(m.a[0],m.a[1]));usedPairs.add(pairKey(m.b[0],m.b[1]));});
+    const schedule=createSchedule(players,usedPairs);
+    if(!schedule.length){setBusy(false);setNotice("No queden rondes possibles sense repetir parelles.");return;}
     const generated=schedule.slice(0,Math.min(count,schedule.length));
-    if(generated.length<count){setBusy(false);setNotice("El màxim calendari vàlid per a "+players.length+" participants és de "+schedule.length+" rondes. No es crearan rondes amb parelles repetides.");return;}
-    const {data:roundRows,error:roundError}=await db.from("tournament_rounds").insert(generated.map((_,i)=>({tournament_id:TOURNAMENT_ID,round_number:i+1,status:"scheduled"}))).select("id,round_number");
+    if(generated.length<count){setBusy(false);setNotice("Només es poden afegir "+schedule.length+" rondes més sense repetir parelles.");return;}
+    const roundNumbers=generated.map((_,i)=>offset+i+1);
+    const {data:roundRows,error:roundError}=await db.from("tournament_rounds").insert(generated.map((_,i)=>({tournament_id:TOURNAMENT_ID,round_number:roundNumbers[i],status:"scheduled"}))).select("id,round_number");
     if(roundError||!roundRows){setBusy(false);setNotice(roundError?.message||"No s'han pogut crear les rondes.");return;}
     const idByNumber=new Map(roundRows.map((r:any)=>[r.round_number,r.id]));
-    const {data:matchRows,error:matchError}=await db.from("tournament_matches").insert(generated.map((_,i)=>({round_id:idByNumber.get(i+1),table_number:1,status:"scheduled"}))).select("id,round_id");
+    const {data:matchRows,error:matchError}=await db.from("tournament_matches").insert(generated.map((_,i)=>({round_id:idByNumber.get(roundNumbers[i]),table_number:1,status:"scheduled"}))).select("id,round_id");
     if(matchError||!matchRows){await db.from("tournament_rounds").delete().in("id",roundRows.map((r:any)=>r.id));setBusy(false);setNotice(matchError?.message||"Error creant les partides.");return;}
     const links:any[]=[],resting:any[]=[];
     generated.forEach((p,i)=>{
-      const roundId=idByNumber.get(i+1),match=matchRows.find((m:any)=>m.round_id===roundId);
+      const roundId=idByNumber.get(roundNumbers[i]),match=matchRows.find((m:any)=>m.round_id===roundId);
       if(!match)return;
       p.a.forEach((id,pos)=>links.push({match_id:match.id,participant_id:id,side:"A",position_in_side:pos+1}));
       p.b.forEach((id,pos)=>links.push({match_id:match.id,participant_id:id,side:"B",position_in_side:pos+1}));
@@ -207,7 +211,7 @@ export default function BilliardsPage(){
     const [linkRes,restRes]=await Promise.all([db.from("tournament_match_participants").insert(links),db.from("tournament_round_resting").insert(resting)]);
     if(linkRes.error||restRes.error){await db.from("tournament_rounds").delete().in("id",roundRows.map((r:any)=>r.id));setBusy(false);setNotice(linkRes.error?.message||restRes.error?.message||"Error guardant els descansos.");return;}
     await db.from("tournaments").update({status:"in_progress"}).eq("id",TOURNAMENT_ID);
-    setBusy(false);setNotice("Calendari generat: "+generated.length+" rondes, sense repetir cap parella.");await load();
+    setBusy(false);setNotice(append?"Afegides "+generated.length+" rondes noves, sense repetir parelles.":"Calendari generat: "+generated.length+" rondes, sense repetir cap parella.");if(append)setActiveRound(offset+1);await load();
   }
 
   async function nextRound(){
@@ -315,7 +319,10 @@ export default function BilliardsPage(){
           <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"var(--muted)"}}><span>1 ronda</span><span>Màxim: {suggestedRounds}</span></div>
           <button className="primary" disabled={players.length<4||busy||suggestedRounds<1} onClick={()=>generateRounds(roundsToGenerate)}>{busy?"Generant…":"Generar "+roundsToGenerate+" rondes →"}</button>
         </div>}
-        {isAdmin&&started&&<div style={{display:"flex",gap:8,marginTop:15,flexWrap:"wrap"}}><button className="primary" disabled={busy||activeRound>=rounds.length} onClick={nextRound}>Següent ronda →</button><button className="secondary" disabled={busy||played===0||tournamentStatus==="completed"} onClick={undoLast}>Desfer últim resultat</button><button className="danger" disabled={busy||tournamentStatus==="completed"} onClick={resetRounds}>Reiniciar rondes ↻</button></div>}
+        {isAdmin&&started&&<div style={{display:"grid",gap:10,marginTop:15}}>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}><button className="primary" disabled={busy||activeRound>=rounds.length} onClick={nextRound}>Següent ronda →</button><button className="secondary" disabled={busy||played===0||tournamentStatus==="completed"} onClick={undoLast}>Desfer últim resultat</button><button className="danger" disabled={busy||tournamentStatus==="completed"} onClick={resetRounds}>Reiniciar rondes ↻</button></div>
+          {isAdmin&&tournamentStatus!=="completed"&&rounds.length<suggestedRounds&&<div className="participant-picker"><div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:12}}><b>Ampliar el calendari</b><strong>{Math.min(roundsToGenerate, suggestedRounds-rounds.length)} / {suggestedRounds-rounds.length} disponibles</strong></div><input aria-label="Rondes addicionals" type="range" min="1" max={Math.max(1,suggestedRounds-rounds.length)} step="1" value={Math.max(1,Math.min(roundsToGenerate,suggestedRounds-rounds.length))} onChange={e=>setRoundsToGenerate(Number(e.target.value))} style={{width:"100%",accentColor:"var(--accent)"}}/><button className="primary" disabled={busy} onClick={()=>void generateRounds(Math.min(roundsToGenerate,suggestedRounds-rounds.length),true)}>Afegir {Math.min(roundsToGenerate,suggestedRounds-rounds.length)} rondes +</button></div>}
+        </div>}
         {isAdmin&&allDone&&tournamentStatus!=="completed"&&<button className="primary" style={{width:"100%",marginTop:12}} disabled={busy} onClick={finalizeTournament}>Tancar torneig i publicar podi</button>}
         {isAdmin&&tournamentStatus==="completed"&&<p className="notice">Podi publicat i punts incorporats a la classificació general.</p>}
       </section>
