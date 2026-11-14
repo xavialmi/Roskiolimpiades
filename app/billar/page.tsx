@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";\nimport { createClient } from "@supabase/supabase-js";
+import { useEffect, useMemo, useState } from "react";
+import { createClient } from "@supabase/supabase-js";
 
 type Player = { id:string; name:string; rests:number; wins:number; losses:number; ballsFor:number; ballsAgainst:number };
 type Match = { id:string; round:number; a:[string,string]; b:[string,string]; scoreA:number; scoreB:number; winner:"A"|"B"|null; blackEarly:boolean; done:boolean };
 type Tournament = { players:Player[]; matches:Match[]; round:number; started:boolean; joinCode:string };
-const KEY="roskiolimpiades-bola8-v1";\nconst db=createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!,process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!);
+const KEY="roskiolimpiades-bola8-v1";
+const db=createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!,process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!);
 const uid=()=>Math.random().toString(36).slice(2,10);
 const fresh=():Tournament=>({players:[],matches:[],round:0,started:false,joinCode:Math.random().toString(36).slice(2,8).toUpperCase()});
 const shuffle=<T,>(a:T[])=>[...a].sort(()=>Math.random()-.5);
@@ -44,7 +46,8 @@ export default function Home(){
  const standings=useMemo(()=>[...players].sort((a,b)=>b.wins-a.wins||((b.ballsFor-b.ballsAgainst)-(a.ballsFor-a.ballsAgainst))||b.ballsFor-a.ballsFor||a.name.localeCompare(b.name)),[players]);
  const addPlayer=()=>{const selected=globalPlayers.find(p=>p.id===selectedGlobal);if(!selected||players.some(p=>p.id===selected.id))return;setData(d=>({...d,players:[...d.players,{id:selected.id,name:selected.name,rests:0,wins:0,losses:0,ballsFor:0,ballsAgainst:0}]}));setSelectedGlobal("");};
  const removePlayer=(id:string)=>setData(d=>({...d,players:d.players.filter(p=>p.id!==id)}));
- const nextRound=()=>{if(players.length<4||(current&&!current.done))return;const existing=data.matches.find(m=>m.round===data.round+1);if(existing){setData(d=>({...d,round:d.round+1}));return;}const p=createPairing(players,data.matches,data.round+1);if(!p)return;setData(d=>({...d,round:d.round+1,matches:[...d.matches,p.match],players:d.players.map(x=>p.rests.includes(x.id)?{...x,rests:x.rests+1}:x),started:true}));};\n const generateAllRounds=()=>{if(players.length<4||data.started)return;let simulated=[...players];let generated=[...data.matches];let made=0;for(let r=1;r<=roundsToGenerate;r++){const p=createPairing(simulated,generated,r);if(!p)break;generated.push(p.match);simulated=simulated.map(x=>p.rests.includes(x.id)?{...x,rests:x.rests+1}:x);made++;}if(made>0)setData(d=>({...d,round:1,matches:generated,players:simulated,started:true}));};
+ const nextRound=()=>{if(players.length<4||(current&&!current.done))return;const existing=data.matches.find(m=>m.round===data.round+1);if(existing){setData(d=>({...d,round:d.round+1}));return;}const p=createPairing(players,data.matches,data.round+1);if(!p)return;setData(d=>({...d,round:d.round+1,matches:[...d.matches,p.match],players:d.players.map(x=>p.rests.includes(x.id)?{...x,rests:x.rests+1}:x),started:true}));};
+ const generateAllRounds=()=>{if(players.length<4||data.started)return;let simulated=[...players];let generated=[...data.matches];let made=0;for(let r=1;r<=roundsToGenerate;r++){const p=createPairing(simulated,generated,r);if(!p)break;generated.push(p.match);simulated=simulated.map(x=>p.rests.includes(x.id)?{...x,rests:x.rests+1}:x);made++;}if(made>0)setData(d=>({...d,round:1,matches:generated,players:simulated,started:true}));};
  const saveResult=(id:string,scoreA:number,scoreB:number,blackEarly:boolean,blackTeam:"A"|"B")=>{
   if(scoreA<0||scoreB<0||scoreA>7||scoreB>7||(!blackEarly&&scoreA===scoreB))return;
   setData(d=>{const old=d.matches.find(m=>m.id===id);if(!old)return d;const winner: "A"|"B"=blackEarly?(blackTeam==="A"?"B":"A"):(scoreA>scoreB?"A":"B");
