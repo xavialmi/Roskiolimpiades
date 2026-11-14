@@ -61,3 +61,27 @@
 
 .management-participant .participant-delete{color:#ff8f82}
 .management-participant .participant-delete:hover{color:#ffb0a7}
+
+
+/* Ajustos de viewport per a billar en mòbil */
+html,body{width:100%;max-width:100%;overflow-x:hidden}
+.app{width:100%;min-width:0;max-width:1180px;margin-inline:auto}
+.app>*{min-width:0}
+.app .topbar{gap:12px;min-width:0}
+.app .topbar>.brand{flex:1 1 220px;min-width:0}
+.app .topbar>.brand>div:last-child{min-width:0}
+.app .topbar .brand h1{overflow-wrap:anywhere}
+.app .pill{max-width:100%;overflow-wrap:anywhere}
+.app .panel,.app .stat,.app .person,.app .standing,.app .match{min-width:0}
+@media(max-width:720px){
+  .app{padding:16px 14px calc(110px + env(safe-area-inset-bottom))}
+  .app .topbar{flex-wrap:wrap;align-items:center}
+  .app .topbar>.brand{flex:1 1 220px}
+  .app .topbar>.pill{margin-left:54px}
+  .app .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .app .grid{grid-template-columns:minmax(0,1fr)}
+  .app .panel{width:100%}
+  .app .standing{gap:7px;padding:10px 8px}
+  .app .standing .metric{min-width:42px}
+  .app .bottom-dock{width:calc(100% - 20px);max-width:760px;left:50%;transform:translateX(-50%)}
+}
