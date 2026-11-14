@@ -42,6 +42,7 @@ export default function Home() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loginBusy, setLoginBusy] = useState(false);
+  const [signupBusy, setSignupBusy] = useState(false);
   const [newParticipant, setNewParticipant] = useState("");
   const [newGame, setNewGame] = useState("");
   const [newTeam, setNewTeam] = useState("");
@@ -102,6 +103,33 @@ export default function Home() {
     setLoginBusy(false);
     if (error) setNotice(error.message);
     else { setSession(data.session); setPassword(""); setNotice(data.user.app_metadata?.role === "admin" ? "Sessió d'organitzador iniciada." : "Compte autenticat, però encara no té permisos d'organitzador."); }
+  }
+  async function createOrganizerAccount() {
+    const db = getSupabase();
+    if (!db) return;
+    if (email.trim().toLowerCase() !== "xavialmirall4@gmail.com") {
+      setNotice("Aquest registre inicial està restringit al correu d'organitzador autoritzat.");
+      return;
+    }
+    if (password.length < 8) {
+      setNotice("La contrasenya ha de tenir almenys 8 caràcters.");
+      return;
+    }
+    setSignupBusy(true); setNotice("");
+    const { data, error } = await db.auth.signUp({
+      email: "xavialmirall4@gmail.com",
+      password,
+      options: { emailRedirectTo: "https://roskiolimpiades.vercel.app" }
+    });
+    setSignupBusy(false);
+    if (error) { setNotice(error.message); return; }
+    setPassword("");
+    if (data.session) {
+      setSession(data.session);
+      setNotice("Compte creat. El rol d'organitzador s'ha assignat automàticament.");
+    } else {
+      setNotice("T'hem enviat un correu de confirmació. Confirma'l i després inicia sessió amb la contrasenya que acabes de crear.");
+    }
   }
   async function signOut() { const db = getSupabase(); if (db) await db.auth.signOut(); setSession(null); }
   async function addParticipant() {
@@ -185,7 +213,7 @@ export default function Home() {
 
     {tab === "gestio" && <section className="page-content">
       <div className="page-title"><span className="eyebrow">ZONA PRIVADA</span><h1>Panell de <em>gestió.</em></h1><p>Només l'organització pot modificar participants, jocs, equips i resultats.</p></div>
-      {!session ? <form className="login-card" onSubmit={signIn}><h2>Accés d'organitzador</h2><label>Correu electrònic<input value={email} onChange={e=>setEmail(e.target.value)} type="email" required placeholder="organitzador@exemple.com"/></label><label>Contrasenya<input value={password} onChange={e=>setPassword(e.target.value)} type="password" required placeholder="Contrasenya"/></label><button className="button button-primary" disabled={loginBusy}>{loginBusy?"Entrant…":"Iniciar sessió"}</button><small>Els comptes d'organitzador es creen manualment. No hi ha registre públic.</small></form> : !isAdmin ? <div className="login-card"><h2>Falten permisos</h2><p>Aquest usuari ha d'obtenir el rol d'organitzador (app_metadata.role = admin) a Supabase.</p><button className="button button-secondary" onClick={signOut}>Tancar sessió</button></div> : <div className="management-grid">
+      {!session ? <form className="login-card" onSubmit={signIn}><h2>Accés d'organitzador</h2><label>Correu electrònic<input value={email} onChange={e=>setEmail(e.target.value)} type="email" required placeholder="organitzador@exemple.com"/></label><label>Contrasenya<input value={password} onChange={e=>setPassword(e.target.value)} type="password" required placeholder="Contrasenya"/></label><button className="button button-primary" disabled={loginBusy}>{loginBusy?"Entrant…":"Iniciar sessió"}</button><button type="button" className="button button-secondary" disabled={signupBusy||loginBusy} onClick={createOrganizerAccount}>{signupBusy?"Creant compte…":"Crear el meu compte d'organitzador"}</button><small>El primer compte està restringit al correu autoritzat. No hi ha registre públic general.</small></form> : !isAdmin ? <div className="login-card"><h2>Falten permisos</h2><p>Aquest usuari ha d'obtenir el rol d'organitzador (app_metadata.role = admin) a Supabase.</p><button className="button button-secondary" onClick={signOut}>Tancar sessió</button></div> : <div className="management-grid">
         <div className="management-card"><div className="section-heading"><h2>Participants</h2><span>{participants.length}</span></div><div className="inline-form"><input value={newParticipant} onChange={e=>setNewParticipant(e.target.value)} placeholder="Nom i cognoms"/><button onClick={addParticipant}>Afegir</button></div><small>Registre global compartit per tots els jocs.</small></div>
         <div className="management-card"><div className="section-heading"><h2>Jocs</h2><span>{games.length}</span></div><div className="inline-form"><input value={newGame} onChange={e=>setNewGame(e.target.value)} placeholder="Nom del nou joc"/><button onClick={addGame}>Crear</button></div><small>Els jocs nous quedaran disponibles al catàleg.</small></div>
         <div className="management-card"><div className="section-heading"><h2>Equips</h2><span>{teams.length}</span></div><div className="inline-form"><input value={newTeam} onChange={e=>setNewTeam(e.target.value)} placeholder="Nom de l'equip"/><button onClick={addTeam}>Crear</button></div><small>Els equips conserven identitat i historial; els punts sempre van a les persones.</small></div>
