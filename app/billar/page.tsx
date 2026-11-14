@@ -353,12 +353,12 @@ export default function BilliardsPage(){
     if(existing.data?.length){setNotice("Aquest torneig ja té un podi publicat. No es duplicaran els punts.");return;}
     const awards:{tournament_id:string;participant_id:string;placement:number}[]=[];
     let index=0;
-    while(index<standings.length&&index<3){
+    while(index<standings.length){
       const first=standings[index];
       const same=(p:Player)=>p.wins===first.wins&&(p.ballsFor-p.ballsAgainst)===(first.ballsFor-first.ballsAgainst)&&p.ballsFor===first.ballsFor;
-      const group=standings.filter(same);
+      const group=standings.slice(index).filter(same);
       const placement=index+1;
-      if(placement<=3)group.forEach(p=>awards.push({tournament_id:TOURNAMENT_ID,participant_id:p.id,placement}));
+      group.forEach(p=>awards.push({tournament_id:TOURNAMENT_ID,participant_id:p.id,placement}));
       index+=group.length;
     }
     if(!awards.length){setNotice("No hi ha resultats per publicar.");return;}
