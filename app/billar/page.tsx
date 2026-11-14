@@ -98,7 +98,7 @@ export default function BilliardsPage(){
     if(err){setNotice(err.message);setLoading(false);return;}
     const people=(peopleRes.data||[]).map((p:any)=>({id:p.id,name:p.display_name}));
     setGlobalPlayers(people);
-    const selected=(entriesRes.data||[]).map((e:any)=>({id:e.participants.id,name:e.participants.display_name,rests:0,wins:0,losses:0,ballsFor:0,ballsAgainst:0}));
+    const selected=(entriesRes.data||[]).map((e:any)=>({id:e.participants.id,name:e.participants.display_name,rests:0,played:0,wins:0,losses:0,ballsFor:0,ballsAgainst:0}));
     const roundRows=(roundsRes.data||[]) as any[];
     const roundNumberById=new Map(roundRows.map(r=>[r.id,r.round_number]));
     const grouped=new Map<string,{a:string[];b:string[]}>();
@@ -117,7 +117,7 @@ export default function BilliardsPage(){
     for(const r of roundRows){
       for(const id of restsByRound.get(r.id)||[]){const p=stats.get(id);if(p)p.rests++;}
     }
-    for(const m of matchRows.filter(x=>x.done)){
+    for(const m of matchRows){for(const id of [...m.a,...m.b]){const p=stats.get(id);if(p)p.played++;}}\n    for(const m of matchRows.filter(x=>x.done)){
       const winner=m.winner==="A"?m.a:m.b;
       const loser=m.winner==="A"?m.b:m.a;
       const winnerFor=m.winner==="A"?m.scoreA:m.scoreB;
