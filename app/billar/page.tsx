@@ -278,6 +278,13 @@ export default function BilliardsPage(){
     {!isAdmin&&<section className="panel" style={{marginTop:16}}><h3>Accés d'organitzador</h3><form className="list" onSubmit={signIn}><input className="field" type="email" required placeholder="Correu electrònic" value={email} onChange={e=>setEmail(e.target.value)}/><input className="field" type="password" required placeholder="Contrasenya" value={password} onChange={e=>setPassword(e.target.value)}/><button className="primary" disabled={busy}>{busy?"Entrant…":"Iniciar sessió"}</button></form></section>}
     {isAdmin&&<button className="secondary" style={{marginTop:14}} onClick={signOut}>Tancar sessió</button>}
     <p className="notice">Les rondes i els resultats es guarden a Supabase i s'actualitzen en directe a tots els dispositius.</p>
+    <nav className="bottom-dock" aria-label="Navegació principal">
+      <a className="dock-item" href="/#inici"><span className="dock-icon">⌂</span><small>Inici</small></a>
+      <a className="dock-item" href="/#classificacio"><span className="dock-icon">♜</span><small>Classificació</small></a>
+      <a className="dock-item active" href="/#jocs"><span className="dock-icon">◈</span><small>Jocs</small></a>
+      <a className="dock-item" href="/#participants"><span className="dock-icon">♙</span><small>Participants</small></a>
+      <a className="dock-item" href="/#gestio"><span className="dock-icon">⚙</span><small>Gestió</small></a>
+    </nav>
   </main>;
 }
 
