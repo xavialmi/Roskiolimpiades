@@ -45,8 +45,10 @@ export default function BilliardsPage(){
   const [matches,setMatches]=useState<Match[]>([]);
   const [rounds,setRounds]=useState<Round[]>([]);
   const [activeRound,setActiveRound]=useState(1);
-  const [selectedGlobal,setSelectedGlobal]=useState("");
+  const [selectedGlobals,setSelectedGlobals]=useState<string[]>([]);
   const [roundsToGenerate,setRoundsToGenerate]=useState(8);
+  const [editingPlayer,setEditingPlayer]=useState<string|null>(null);
+  const [editingName,setEditingName]=useState("");
   const [session,setSession]=useState<any>(null);
   const [email,setEmail]=useState("");
   const [password,setPassword]=useState("");
@@ -133,6 +135,7 @@ export default function BilliardsPage(){
 
   const current=matches.find(m=>m.round===activeRound);
   const started=rounds.length>0;
+  useEffect(()=>{if(!started&&players.length>=4)setRoundsToGenerate(Math.max(1,players.length));},[players.length,started]);
   const standings=useMemo(()=>[...players].sort((a,b)=>b.wins-a.wins||((b.ballsFor-b.ballsAgainst)-(a.ballsFor-a.ballsAgainst))||b.ballsFor-a.ballsFor||a.name.localeCompare(b.name)),[players]);
   const playerName=(id:string)=>players.find(p=>p.id===id)?.name??globalPlayers.find(p=>p.id===id)?.name??"Participant";
   const played=matches.filter(m=>m.done).length;
@@ -141,12 +144,20 @@ export default function BilliardsPage(){
   async function signIn(e:React.FormEvent){e.preventDefault();setBusy(true);setNotice("");const {data,error}=await db.auth.signInWithPassword({email,password});setBusy(false);if(error)setNotice(error.message);else{setSession(data.session);setPassword("");setNotice(data.user.app_metadata?.role==="admin"?"Sessió d'organitzador iniciada.":"Aquest compte no té permisos d'organitzador.");}}
   async function signOut(){await db.auth.signOut();setSession(null);}
 
-  async function addPlayer(){
-    if(!isAdmin||!selectedGlobal)return;
-    setBusy(true);
-    const {error}=await db.from("tournament_entries").insert({tournament_id:TOURNAMENT_ID,participant_id:selectedGlobal});
+  async function addPlayers(){
+    if(!isAdmin||!selectedGlobals.length||started)return;
+    setBusy(true);setNotice("");
+    const ids=selectedGlobals.filter(id=>!players.some(p=>p.id===id));
+    const {error}=await db.from("tournament_entries").insert(ids.map(participant_id=>({tournament_id:TOURNAMENT_ID,participant_id})));
     setBusy(false);
-    if(error)setNotice(error.message);else{setSelectedGlobal("");setNotice("Participant inscrit al torneig.");await load();}
+    if(error)setNotice(error.message);else{setSelectedGlobals([]);setNotice(`${ids.length} participants inscrits al torneig.`);await load();}
+  }
+  async function savePlayerName(id:string){
+    if(!isAdmin||!editingName.trim())return;
+    setBusy(true);setNotice("");
+    const {error}=await db.from("participants").update({display_name:editingName.trim()}).eq("id",id);
+    setBusy(false);
+    if(error)setNotice(error.message);else{setNotice("Participant actualitzat.");setEditingPlayer(null);await load();}
   }
   async function removePlayer(id:string){
     if(!isAdmin||started)return;
@@ -261,14 +272,14 @@ export default function BilliardsPage(){
     <nav className="tabs"><button className="tab active">Torneig</button><a className="tab" href="/#classificacio">Classificació general ↗</a></nav>
     {loading?<div className="empty">Carregant dades del torneig…</div>:<div className="grid">
       <section className="panel"><div className="roundhead"><h3>Participants <span className="muted">({players.length})</span></h3><span className="tag">{isAdmin?"ORGANITZADOR":"LECTURA"}</span></div>
-        {isAdmin&& !started&&<div className="addrow"><select className="field" value={selectedGlobal} onChange={e=>setSelectedGlobal(e.target.value)}><option value="">Selecciona un participant global…</option>{globalPlayers.filter(p=>!players.some(x=>x.id===p.id)).map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select><button className="primary" onClick={addPlayer} disabled={!selectedGlobal||busy}>Afegir +</button></div>}
+        {isAdmin&&!started&&<div className="participant-picker"><div className="picker-actions"><b>Selecciona qui jugarà</b><div><button type="button" className="mini" onClick={()=>setSelectedGlobals(globalPlayers.filter(p=>!players.some(x=>x.id===p.id)).map(p=>p.id))}>Tots</button><button type="button" className="mini" onClick={()=>setSelectedGlobals([])}>Netejar</button></div></div><div className="picker-list">{globalPlayers.filter(p=>!players.some(x=>x.id===p.id)).map(p=><label className="picker-option" key={p.id}><input type="checkbox" checked={selectedGlobals.includes(p.id)} onChange={e=>setSelectedGlobals(old=>e.target.checked?[...old,p.id]:old.filter(id=>id!==p.id))}/><span>{p.name}</span></label>)}</div><button className="primary picker-submit" onClick={addPlayers} disabled={!selectedGlobals.length||busy}>Afegir seleccionats ({selectedGlobals.length}) +</button></div>}
         {isAdmin&&globalPlayers.length===0&&<p className="notice">Afegeix primer participants des de la secció Gestió.</p>}
-        <div className="list">{players.length===0?<div className="empty"><strong>Encara no hi ha participants</strong>L'organitzador ha d'inscriure un mínim de quatre persones.</div>:players.map((p,i)=><div className="person" key={p.id}><div className="row"><span className="muted">{String(i+1).padStart(2,"0")}</span><b>{p.name}</b></div><div className="row"><small>{p.wins}V · {p.losses}D · {p.rests} descansos</small>{isAdmin&&!started&&<button className="mini" onClick={()=>removePlayer(p.id)}>×</button>}</div></div>)}</div>
+        <div className="list">{players.length===0?<div className="empty"><strong>Encara no hi ha participants</strong>L'organitzador ha d'inscriure un mínim de quatre persones.</div>:players.map((p,i)=><div className="person" key={p.id}><div className="person-main"><div className="row"><span className="muted">{String(i+1).padStart(2,"0")}</span>{editingPlayer===p.id?<input className="field edit-name" aria-label="Nom del participant" value={editingName} onChange={e=>setEditingName(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")void savePlayerName(p.id);}}/>:<b>{p.name}</b>}</div><small>{p.wins}V · {p.losses}D · {p.rests} descansos</small></div>{isAdmin&&<div className="person-actions">{editingPlayer===p.id?<><button className="mini" onClick={()=>void savePlayerName(p.id)} disabled={busy||!editingName.trim()}>Desar</button><button className="mini" onClick={()=>setEditingPlayer(null)}>Cancel·lar</button></>:<button className="mini" onClick={()=>{setEditingPlayer(p.id);setEditingName(p.name);}}>Editar</button>}{!started&&<button className="mini remove" onClick={()=>void removePlayer(p.id)}>Eliminar</button>}</div>}</div>)}</div>
         {isAdmin&&!started&&players.length>=4&&<p className="notice">El sorteig prioritza qui ha descansat menys i intenta evitar repetir companys i rivals.</p>}
       </section>
       <section className="panel"><div className="roundhead"><h3>Rondes del torneig</h3><span className="tag">{rounds.filter(r=>r.status==="completed").length}/{rounds.length} COMPLETES</span></div>
-        {!started?<div className="empty"><strong>Encara no hi ha rondes</strong>Inscriu els participants i genera el calendari sencer d'una vegada.</div>:<><div className="tabs">{rounds.map(r=><button key={r.id} className={activeRound===r.number?"tab active":"tab"} onClick={()=>setActiveRound(r.number)}>R{r.number}</button>)}</div>{current?<MatchCard key={current.id} match={current} playerName={playerName} isAdmin={isAdmin} onSave={saveResult}/>:<div className="empty">No s'ha trobat la partida d'aquesta ronda.</div>}<div className="notice">Descansen: {players.filter(p=>!current?.a.includes(p.id)&&!current?.b.includes(p.id)).map(p=>p.name).join(", ")||"Ningú"}</div></>}
-        {isAdmin&&!started&&<div style={{display:"flex",gap:8,marginTop:15,alignItems:"center",flexWrap:"wrap"}}><label className="round-count">Nombre de rondes <input className="field" type="number" min="1" max="60" value={roundsToGenerate} onChange={e=>setRoundsToGenerate(Math.max(1,Math.min(60,Number(e.target.value)||1)))}/></label><button className="primary" disabled={players.length<4||busy} onClick={()=>generateRounds(roundsToGenerate)}>{busy?"Generant…":"Generar totes les rondes →"}</button></div>}
+        {!started?<div className="empty"><strong>Encara no hi ha rondes</strong>Inscriu almenys quatre participants, tria quantes rondes voleu jugar i genera el calendari complet.</div>:<><div className="tabs">{rounds.map(r=><button key={r.id} className={activeRound===r.number?"tab active":"tab"} onClick={()=>setActiveRound(r.number)}>R{r.number}</button>)}</div>{current?<MatchCard key={current.id} match={current} playerName={playerName} isAdmin={isAdmin} onSave={saveResult}/>:<div className="empty">No s'ha trobat la partida d'aquesta ronda.</div>}<div className="notice">Descansen: {players.filter(p=>!current?.a.includes(p.id)&&!current?.b.includes(p.id)).map(p=>p.name).join(", ")||"Ningú"}</div></>}
+        {isAdmin&&!started&&<div style={{display:"flex",gap:8,marginTop:15,alignItems:"center",flexWrap:"wrap"}}><label className="round-count">Rondes (proposta: {players.length}) <input className="field" type="number" min="1" max="60" value={roundsToGenerate} onChange={e=>setRoundsToGenerate(Math.max(1,Math.min(60,Number(e.target.value)||1)))}/></label><button className="primary" disabled={players.length<4||busy} onClick={()=>generateRounds(roundsToGenerate)}>{busy?"Generant…":"Generar totes les rondes →"}</button></div>}
         {isAdmin&&started&&<div style={{display:"flex",gap:8,marginTop:15,flexWrap:"wrap"}}><button className="primary" disabled={busy||activeRound>=rounds.length} onClick={nextRound}>Següent ronda →</button><button className="secondary" disabled={busy||played===0||tournamentStatus==="completed"} onClick={undoLast}>Desfer últim resultat</button></div>}
         {isAdmin&&allDone&&tournamentStatus!=="completed"&&<button className="primary" style={{width:"100%",marginTop:12}} disabled={busy} onClick={finalizeTournament}>Tancar torneig i publicar podi</button>}
         {isAdmin&&tournamentStatus==="completed"&&<p className="notice">Podi publicat i punts incorporats a la classificació general.</p>}
