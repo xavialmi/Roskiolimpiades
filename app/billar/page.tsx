@@ -117,7 +117,8 @@ export default function BilliardsPage(){
     for(const r of roundRows){
       for(const id of restsByRound.get(r.id)||[]){const p=stats.get(id);if(p)p.rests++;}
     }
-    for(const m of matchRows){for(const id of [...m.a,...m.b]){const p=stats.get(id);if(p)p.played++;}}\n    for(const m of matchRows.filter(x=>x.done)){
+    for(const m of matchRows){for(const id of [...m.a,...m.b]){const p=stats.get(id);if(p)p.played++;}}
+    for(const m of matchRows.filter(x=>x.done)){
       const winner=m.winner==="A"?m.a:m.b;
       const loser=m.winner==="A"?m.b:m.a;
       const winnerFor=m.winner==="A"?m.scoreA:m.scoreB;
