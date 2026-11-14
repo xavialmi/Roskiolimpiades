@@ -25,40 +25,35 @@ function combinations<T,>(items:T[],size:number):T[][] {
 function createSchedule(players:Player[]):Pairing[] {
   const edges=combinations(players,2).map(pair=>[pair[0].id,pair[1].id] as [string,string]);
   const n=edges.length;
-  const full=(1n<<BigInt(n))-1n;
-  function solve(mask:bigint,memo:Set<string>):[number,number][]|null {
-    if(mask===0n)return [];
-    const key=mask.toString();
+  const memo=new Set<string>();
+  function solve(remaining:number[]):[number,number][]|null {
+    if(!remaining.length)return [];
+    const key=remaining.join(",");
     if(memo.has(key))return null;
-    let first=-1;
-    for(let i=0;i<n;i++)if(mask&(1n<<BigInt(i))){first=i;break;}
-    if(first<0)return [];
-    const bit=1n<<BigInt(first),a=edges[first],candidates:number[]=[];
-    for(let j=first+1;j<n;j++)if(mask&(1n<<BigInt(j))){
+    const first=remaining[0],a=edges[first];
+    const candidates=remaining.slice(1).filter(j=>{
       const b=edges[j];
-      if(a[0]!==b[0]&&a[0]!==b[1]&&a[1]!==b[0]&&a[1]!==b[1])candidates.push(j);
-    }
-    candidates.sort(()=>Math.random()-.5);
-    for(const j of candidates){
-      const rest=solve(mask^bit^(1n<<BigInt(j)),memo);
+      return a[0]!==b[0]&&a[0]!==b[1]&&a[1]!==b[0]&&a[1]!==b[1];
+    });
+    // Try a randomized order so the calendar does not always look identical.
+    for(const j of shuffle(candidates)){
+      const rest=solve(remaining.filter(k=>k!==first&&k!==j));
       if(rest)return [[first,j],...rest];
     }
-    if(mask.toString(2).replace(/0/g,"").length%2===1){
-      const rest=solve(mask^bit,memo);
+    // An odd number of remaining partnerships can leave one unused.
+    if(remaining.length%2===1){
+      const rest=solve(remaining.slice(1));
       if(rest)return rest;
     }
-    memo.add(key);return null;
+    memo.add(key);
+    return null;
   }
-  for(let attempt=0;attempt<30;attempt++){
-    const shuffled=shuffle(edges);
-    edges.splice(0,edges.length,...shuffled);
-    const result=solve(full,new Set());
-    if(result)return result.map(([i,j])=>{
-      const a=edges[i],b=edges[j];
-      return {a,b,rests:players.filter(p=>![...a,...b].includes(p.id)).map(p=>p.id)};
-    });
-  }
-  return [];
+  const result=solve(edges.map((_,i)=>i));
+  if(!result)return [];
+  return result.map(([i,j])=>{
+    const a=edges[i],b=edges[j];
+    return {a,b,rests:players.filter(p=>![...a,...b].includes(p.id)).map(p=>p.id)};
+  });
 }
 
 export default function BilliardsPage(){
@@ -69,6 +64,7 @@ export default function BilliardsPage(){
   const [activeRound,setActiveRound]=useState(1);
   const [selectedGlobals,setSelectedGlobals]=useState<string[]>([]);
   const [roundsToGenerate,setRoundsToGenerate]=useState(0);
+  const suggestedRounds=useMemo(()=>players.length>=4?Math.floor((players.length*(players.length-1)/2)/2):0,[players.length]);
   const [editingPlayer,setEditingPlayer]=useState<string|null>(null);
   const [editingName,setEditingName]=useState("");
   const [session,setSession]=useState<any>(null);
@@ -313,7 +309,15 @@ export default function BilliardsPage(){
       </section>
       <section className="panel"><div className="roundhead"><h3>Rondes del torneig</h3><span className="tag">{rounds.filter(r=>r.status==="completed").length}/{rounds.length} COMPLETES</span></div>
         {!started?<div className="empty"><strong>Encara no hi ha rondes</strong>Inscriu almenys quatre participants, tria quantes rondes voleu jugar i genera el calendari complet.</div>:<><div className="tabs">{rounds.map(r=><button key={r.id} className={activeRound===r.number?"tab active":"tab"} onClick={()=>setActiveRound(r.number)}>R{r.number}</button>)}</div>{current?<MatchCard key={current.id} match={current} playerName={playerName} isAdmin={isAdmin} onSave={saveResult}/>:<div className="empty">No s'ha trobat la partida d'aquesta ronda.</div>}<div className="notice">Descansen: {players.filter(p=>!current?.a.includes(p.id)&&!current?.b.includes(p.id)).map(p=>p.name).join(", ")||"Ningú"}</div></>}
-        {isAdmin&&!started&&<div style={{display:"flex",gap:8,marginTop:15,alignItems:"center",flexWrap:"wrap"}}><label className="round-count">Rondes (màxim recomanat: {suggestedRounds}) <input className="field" type="number" min="1" max="60" value={roundsToGenerate} onChange={e=>setRoundsToGenerate(Math.max(1,Math.min(60,Number(e.target.value)||1)))}/></label><button className="primary" disabled={players.length<4||busy} onClick={()=>generateRounds(roundsToGenerate)}>{busy?"Generant…":"Generar totes les rondes →"}</button></div>}
+        {isAdmin&&!started&&<div style={{marginTop:16,display:"grid",gap:12}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:12}}>
+            <label className="round-count" style={{fontWeight:700}}>Nombre de rondes</label>
+            <div style={{textAlign:"right"}}><strong style={{fontSize:24,fontVariantNumeric:"tabular-nums"}}>{roundsToGenerate}</strong><span style={{color:"var(--muted)",fontSize:13}}> / {suggestedRounds} màx.</span></div>
+          </div>
+          <input aria-label="Nombre de rondes" type="range" min="1" max={Math.max(1,suggestedRounds)} step="1" value={Math.min(roundsToGenerate,Math.max(1,suggestedRounds))} onChange={e=>setRoundsToGenerate(Number(e.target.value))} disabled={players.length<4||busy} style={{width:"100%",accentColor:"var(--accent)",cursor:"pointer"}}/>
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"var(--muted)"}}><span>1 ronda</span><span>Màxim: {suggestedRounds}</span></div>
+          <button className="primary" disabled={players.length<4||busy||suggestedRounds<1} onClick={()=>generateRounds(roundsToGenerate)}>{busy?"Generant…":"Generar "+roundsToGenerate+" rondes →"}</button>
+        </div>}}
         {isAdmin&&started&&<div style={{display:"flex",gap:8,marginTop:15,flexWrap:"wrap"}}><button className="primary" disabled={busy||activeRound>=rounds.length} onClick={nextRound}>Següent ronda →</button><button className="secondary" disabled={busy||played===0||tournamentStatus==="completed"} onClick={undoLast}>Desfer últim resultat</button><button className="danger" disabled={busy||tournamentStatus==="completed"} onClick={resetRounds}>Reiniciar rondes ↻</button></div>}
         {isAdmin&&allDone&&tournamentStatus!=="completed"&&<button className="primary" style={{width:"100%",marginTop:12}} disabled={busy} onClick={finalizeTournament}>Tancar torneig i publicar podi</button>}
         {isAdmin&&tournamentStatus==="completed"&&<p className="notice">Podi publicat i punts incorporats a la classificació general.</p>}
