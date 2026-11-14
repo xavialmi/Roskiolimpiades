@@ -231,7 +231,7 @@ export default function Home() {
       <div className="ranking-list"><div className="ranking-head"><span>POS.</span><span>PARTICIPANT</span><span>PODIS</span><span>PUNTS</span></div>
         {loading ? <div className="empty-state">Carregant classificació…</div> : visibleLeaders.length === 0 ? <div className="empty-state">Encara no hi ha punts assignats. Els podis dels tornejos apareixeran aquí.</div> : visibleLeaders.map((person,i)=><div className={"ranking-row "+(i<3?"podium":"")} key={person.participant_id}><span className="rank-number">{String(i+1).padStart(2,"0")}</span><span className="rank-person"><span className="avatar">{person.display_name.slice(0,1).toUpperCase()}</span><b>{person.display_name}</b></span><span className="rank-podiums">{person.podium_tournaments || 0}</span><strong className="rank-points">{Number(person.total_points).toLocaleString("ca-ES")} <small>pts</small></strong></div>)}
       </div>
-      <div className="points-key"><span><b>3 pts</b> · 1r lloc</span><span><b>2 pts</b> · 2n lloc</span><span><b>1 pt</b> · 3r lloc</span><span>Empats: repartiment dels punts ocupats</span></div>
+      <div className="points-key"><span>Els punts depenen del nombre de participants que comencen cada joc: N punts al primer, N−1 al segon i així successivament fins a 1 punt.</span><span>Els desempats es resolen amb els criteris específics de cada joc. Si persisteix un empat exacte, es reparteix la mitjana dels punts de les posicions ocupades.</span></div>
     </section>}
 
     {tab === "jocs" && <section className="page-content">
@@ -240,7 +240,7 @@ export default function Home() {
         {games.map(game=><button className="game-card" key={game.id} onClick={() => game.slug === "billar" ? location.assign("/billar") : setNotice("Aquest joc encara no té el seu torneig configurat.")}><div className="game-icon">{game.icon}</div><div className="game-card-bottom"><span className="status-chip status-ready">JOC ACTIU</span><h3>{game.name}</h3><p>{game.description}</p><span className="card-arrow">↗</span></div></button>)}
         <div className="game-card game-placeholder"><div className="game-icon">＋</div><div className="game-card-bottom"><span className="status-chip">PROPERAMENT</span><h3>Nous reptes</h3><p>Afegirem més competicions durant les Roskiolimpiades.</p></div></div>
       </div>
-      <div className="info-strip"><b>Com es guanyen punts?</b><span>Els tres primers classificats de cada torneig obtenen 3, 2 i 1 punts. En competicions per equips, cada integrant rep els mateixos punts individualment.</span></div>
+      <div className="info-strip"><b>Com es guanyen punts?</b><span>Cada participant que comença suma punts segons la classificació final: N punts al primer, N−1 al segon, fins a 1 punt. En competicions per equips, cada integrant rep els mateixos punts individualment.</span></div>
     </section>}
 
     {tab === "participants" && <section className="page-content">
