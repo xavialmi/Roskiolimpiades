@@ -369,7 +369,7 @@ export default function BilliardsPage(){
 
   return <main className="app">
     <a href="/" className="back-home">← Tots els jocs</a>
-    <header className="topbar"><div className="brand"><img className="logo-image" src="/roskiolimpiades-icon.png" alt="Roskiolimpiades" /><div><div className="eyebrow">ROSKIOLIMPIADES</div><h1>Club de billar · Bola 8</h1></div></div><div className="pill">● {tournamentStatus==="completed"?"TORNEIG FINALITZAT":started?"TORNEIG EN MARXA":"TORNEIG PREPARAT"}</div></header>
+    <header className="topbar"><div className="brand"><img className="logo-image" src="/roskiolimpiades-icon.jpg" alt="Roskiolimpiades" /><div><div className="eyebrow">ROSKIOLIMPIADES</div><h1>Club de billar · Bola 8</h1></div></div><div className="pill">● {tournamentStatus==="completed"?"TORNEIG FINALITZAT":started?"TORNEIG EN MARXA":"TORNEIG PREPARAT"}</div></header>
     <section className="hero"><div><div className="eyebrow">AMERICANA · PARELLES ROTATIVES</div><h2>Que comenci el joc.</h2><p>Una taula, parelles noves i una classificació individual.</p></div><div className="pill">{isAdmin?session.user.email:"Consulta pública"}</div></section>
     {notice&&<div className="panel" style={{marginBottom:14}}>{notice}</div>}
     <section className="stats"><div className="stat"><span>Participants</span><strong>{players.length}</strong></div><div className="stat"><span>Rondes</span><strong>{rounds.length}</strong></div><div className="stat"><span>Partides jugades</span><strong>{played}</strong></div><div className="stat"><span>Pendents</span><strong>{matches.length-played}</strong></div></section>
