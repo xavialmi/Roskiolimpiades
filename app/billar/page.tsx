@@ -22,9 +22,8 @@ function combinations<T,>(items:T[],size:number):T[][] {
   return result;
 }
 
-function createSchedule(players:Player[],usedPairs:Set<string>=new Set()):Pairing[] {
+function createSchedule(players:Player[],usedPairs:Set<string>=new Set(),initialPlayed:Map<string,number>=new Map()):Pairing[] {
   const edges=combinations(players,2).map(pair=>[pair[0].id,pair[1].id] as [string,string]).filter(pair=>!usedPairs.has(pairKey(pair[0],pair[1])));
-  const n=edges.length;
   const memo=new Set<string>();
   function solve(remaining:number[]):[number,number][]|null {
     if(!remaining.length)return [];
@@ -35,12 +34,10 @@ function createSchedule(players:Player[],usedPairs:Set<string>=new Set()):Pairin
       const b=edges[j];
       return a[0]!==b[0]&&a[0]!==b[1]&&a[1]!==b[0]&&a[1]!==b[1];
     });
-    // Try a randomized order so the calendar does not always look identical.
     for(const j of shuffle(candidates)){
       const rest=solve(remaining.filter(k=>k!==first&&k!==j));
       if(rest)return [[first,j],...rest];
     }
-    // An odd number of remaining partnerships can leave one unused.
     if(remaining.length%2===1){
       const rest=solve(remaining.slice(1));
       if(rest)return rest;
@@ -50,10 +47,32 @@ function createSchedule(players:Player[],usedPairs:Set<string>=new Set()):Pairin
   }
   const result=solve(edges.map((_,i)=>i));
   if(!result)return [];
-  return result.map(([i,j])=>{
+  const remaining=result.map(([i,j])=>{
     const a=edges[i],b=edges[j];
     return {a,b,rests:players.filter(p=>![...a,...b].includes(p.id)).map(p=>p.id)};
   });
+  // Order rounds so every prefix distributes appearances as evenly as possible.
+  const played=new Map(players.map(p=>[p.id,initialPlayed.get(p.id)||0]));
+  const ordered:Pairing[]=[];
+  while(remaining.length){
+    let bestScore=Infinity,bestIndices:number[]=[];
+    remaining.forEach((round,index)=>{
+      const next=new Map(played);
+      [...round.a,...round.b].forEach(id=>next.set(id,(next.get(id)||0)+1));
+      const values=[...next.values()];
+      const spread=Math.max(...values)-Math.min(...values);
+      const mean=values.reduce((sum,v)=>sum+v,0)/Math.max(1,values.length);
+      const variance=values.reduce((sum,v)=>sum+(v-mean)*(v-mean),0);
+      const score=spread*100000+variance;
+      if(score<bestScore-1e-9){bestScore=score;bestIndices=[index];}
+      else if(Math.abs(score-bestScore)<1e-9)bestIndices.push(index);
+    });
+    const chosen=bestIndices[Math.floor(Math.random()*bestIndices.length)];
+    const round=remaining.splice(chosen,1)[0];
+    [...round.a,...round.b].forEach(id=>played.set(id,(played.get(id)||0)+1));
+    ordered.push(round);
+  }
+  return ordered;
 }
 
 export default function BilliardsPage(){
@@ -190,7 +209,9 @@ export default function BilliardsPage(){
     setBusy(true);setNotice("");
     const usedPairs=new Set<string>();
     if(append)matches.forEach(m=>{usedPairs.add(pairKey(m.a[0],m.a[1]));usedPairs.add(pairKey(m.b[0],m.b[1]));});
-    const schedule=createSchedule(players,usedPairs);
+    const initialPlayed=new Map<string,number>();
+    if(append)matches.forEach(m=>[...m.a,...m.b].forEach(id=>initialPlayed.set(id,(initialPlayed.get(id)||0)+1)));
+    const schedule=createSchedule(players,usedPairs,initialPlayed);
     if(!schedule.length){setBusy(false);setNotice("No queden rondes possibles sense repetir parelles.");return;}
     const generated=schedule.slice(0,Math.min(count,schedule.length));
     if(generated.length<count){setBusy(false);setNotice("Només es poden afegir "+schedule.length+" rondes més sense repetir parelles.");return;}
