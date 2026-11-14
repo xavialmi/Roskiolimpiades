@@ -248,6 +248,37 @@ export default function BilliardsPage(){
     if(error)setNotice(error.message);else{setNotice("Resultat guardat i sincronitzat.");await load();}
   }
 
+  async function resetRounds(){
+    if(!isAdmin||!started||tournamentStatus==="completed"||busy)return;
+    const ok=confirm("Vols reiniciar les rondes? S'esborraran tots els emparellaments, descansos i resultats del calendari actual. Es mantindran els participants inscrits i podràs generar un calendari nou.");
+    if(!ok)return;
+    setBusy(true);setNotice("");
+    const roundIds=rounds.map(r=>r.id);
+    const matchIds=matches.map(m=>m.id);
+    if(matchIds.length){
+      const {error}=await db.from("tournament_match_participants").delete().in("match_id",matchIds);
+      if(error){setBusy(false);setNotice("No s'han pogut eliminar els participants de les partides: "+error.message);return;}
+    }
+    if(roundIds.length){
+      const {error}=await db.from("tournament_round_resting").delete().in("round_id",roundIds);
+      if(error){setBusy(false);setNotice("No s'han pogut eliminar els descansos: "+error.message);return;}
+    }
+    if(matchIds.length){
+      const {error}=await db.from("tournament_matches").delete().in("id",matchIds);
+      if(error){setBusy(false);setNotice("No s'han pogut eliminar les partides: "+error.message);return;}
+    }
+    if(roundIds.length){
+      const {error}=await db.from("tournament_rounds").delete().in("id",roundIds);
+      if(error){setBusy(false);setNotice("No s'han pogut eliminar les rondes: "+error.message);return;}
+    }
+    const {error}=await db.from("tournaments").update({status:"draft"}).eq("id",TOURNAMENT_ID);
+    setBusy(false);
+    if(error){setNotice("Calendari eliminat, però no s'ha pogut actualitzar l'estat: "+error.message);return;}
+    setActiveRound(1);
+    setNotice("Rondes reiniciades. Els participants continuen inscrits; ja pots generar un calendari nou.");
+    await load();
+  }
+
   async function undoLast(){
     if(!isAdmin)return;
     const last=[...matches].filter(m=>m.done).sort((a,b)=>b.round-a.round)[0];
@@ -298,7 +329,7 @@ export default function BilliardsPage(){
       <section className="panel"><div className="roundhead"><h3>Rondes del torneig</h3><span className="tag">{rounds.filter(r=>r.status==="completed").length}/{rounds.length} COMPLETES</span></div>
         {!started?<div className="empty"><strong>Encara no hi ha rondes</strong>Inscriu almenys quatre participants, tria quantes rondes voleu jugar i genera el calendari complet.</div>:<><div className="tabs">{rounds.map(r=><button key={r.id} className={activeRound===r.number?"tab active":"tab"} onClick={()=>setActiveRound(r.number)}>R{r.number}</button>)}</div>{current?<MatchCard key={current.id} match={current} playerName={playerName} isAdmin={isAdmin} onSave={saveResult}/>:<div className="empty">No s'ha trobat la partida d'aquesta ronda.</div>}<div className="notice">Descansen: {players.filter(p=>!current?.a.includes(p.id)&&!current?.b.includes(p.id)).map(p=>p.name).join(", ")||"Ningú"}</div></>}
         {isAdmin&&!started&&<div style={{display:"flex",gap:8,marginTop:15,alignItems:"center",flexWrap:"wrap"}}><label className="round-count">Rondes (proposta: {players.length}) <input className="field" type="number" min="1" max="60" value={roundsToGenerate} onChange={e=>setRoundsToGenerate(Math.max(1,Math.min(60,Number(e.target.value)||1)))}/></label><button className="primary" disabled={players.length<4||busy} onClick={()=>generateRounds(roundsToGenerate)}>{busy?"Generant…":"Generar totes les rondes →"}</button></div>}
-        {isAdmin&&started&&<div style={{display:"flex",gap:8,marginTop:15,flexWrap:"wrap"}}><button className="primary" disabled={busy||activeRound>=rounds.length} onClick={nextRound}>Següent ronda →</button><button className="secondary" disabled={busy||played===0||tournamentStatus==="completed"} onClick={undoLast}>Desfer últim resultat</button></div>}
+        {isAdmin&&started&&<div style={{display:"flex",gap:8,marginTop:15,flexWrap:"wrap"}}><button className="primary" disabled={busy||activeRound>=rounds.length} onClick={nextRound}>Següent ronda →</button><button className="secondary" disabled={busy||played===0||tournamentStatus==="completed"} onClick={undoLast}>Desfer últim resultat</button><button className="danger" disabled={busy||tournamentStatus==="completed"} onClick={resetRounds}>Reiniciar rondes ↻</button></div>}
         {isAdmin&&allDone&&tournamentStatus!=="completed"&&<button className="primary" style={{width:"100%",marginTop:12}} disabled={busy} onClick={finalizeTournament}>Tancar torneig i publicar podi</button>}
         {isAdmin&&tournamentStatus==="completed"&&<p className="notice">Podi publicat i punts incorporats a la classificació general.</p>}
       </section>
