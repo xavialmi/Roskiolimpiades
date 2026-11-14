@@ -22,41 +22,43 @@ function combinations<T,>(items:T[],size:number):T[][] {
   return result;
 }
 
-function createPairing(players:Player[],matches:Match[]):Pairing|null {
-  if(players.length<4)return null;
-  const previous=matches.length?matches[matches.length-1]:null;
-  let best:{pairing:Pairing;cost:number;tie:number}|null=null;
-  const partitions=[[0,1,2,3],[0,2,1,3],[0,3,1,2]];
-  for(const chosen of combinations(players,4)){
-    const selectedIds=new Set(chosen.map(p=>p.id));
-    const projected=players.map(p=>p.played+(selectedIds.has(p.id)?1:0));
-    const spread=Math.max(...projected)-Math.min(...projected);
-    const mean=projected.reduce((a,b)=>a+b,0)/projected.length;
-    const imbalance=projected.reduce((sum,value)=>sum+(value-mean)**2,0);
-    const consecutive=previous?[...previous.a,...previous.b].filter(id=>selectedIds.has(id)).length:0;
-    for(const perm of partitions){
-      const teamA:[Player,Player]=[chosen[perm[0]],chosen[perm[1]]];
-      const teamB:[Player,Player]=[chosen[perm[2]],chosen[perm[3]]];
-      let repeatedPartners=0;
-      let repeatedOpponents=0;
-      for(const old of matches){
-        const oldTeams=[old.a,old.b];
-        if(oldTeams.some(pair=>pairKey(pair[0],pair[1])===pairKey(teamA[0].id,teamA[1].id)))repeatedPartners++;
-        if(oldTeams.some(pair=>pairKey(pair[0],pair[1])===pairKey(teamB[0].id,teamB[1].id)))repeatedPartners++;
-        for(const x of teamA)for(const y of teamB){
-          if((old.a.includes(x.id)&&old.b.includes(y.id))||(old.b.includes(x.id)&&old.a.includes(y.id)))repeatedOpponents++;
-        }
-      }
-      // Una parella repetida no és una opció: es descarta completament.
-      if(repeatedPartners>0)continue;
-      // Entre opcions sense repetir companys, equilibra partits, torns i rivals.
-      const cost=spread*1000000+imbalance*10000+consecutive*1000+repeatedOpponents*10;
-      const tie=Math.random();
-      const pairing:Pairing={a:[teamA[0].id,teamA[1].id],b:[teamB[0].id,teamB[1].id],rests:players.filter(p=>!selectedIds.has(p.id)).map(p=>p.id)};
-      if(!best||cost<best.cost||(cost===best.cost&&tie>best.tie))best={pairing,cost,tie};
+function createSchedule(players:Player[]):Pairing[] {
+  const edges=combinations(players,2).map(pair=>[pair[0].id,pair[1].id] as [string,string]);
+  const n=edges.length;
+  const full=(1n<<BigInt(n))-1n;
+  function solve(mask:bigint,memo:Set<string>):[number,number][]|null {
+    if(mask===0n)return [];
+    const key=mask.toString();
+    if(memo.has(key))return null;
+    let first=-1;
+    for(let i=0;i<n;i++)if(mask&(1n<<BigInt(i))){first=i;break;}
+    if(first<0)return [];
+    const bit=1n<<BigInt(first),a=edges[first],candidates:number[]=[];
+    for(let j=first+1;j<n;j++)if(mask&(1n<<BigInt(j))){
+      const b=edges[j];
+      if(a[0]!==b[0]&&a[0]!==b[1]&&a[1]!==b[0]&&a[1]!==b[1])candidates.push(j);
     }
+    candidates.sort(()=>Math.random()-.5);
+    for(const j of candidates){
+      const rest=solve(mask^bit^(1n<<BigInt(j)),memo);
+      if(rest)return [[first,j],...rest];
+    }
+    if(mask.toString(2).replace(/0/g,"").length%2===1){
+      const rest=solve(mask^bit,memo);
+      if(rest)return rest;
+    }
+    memo.add(key);return null;
   }
-  return best?.pairing??null;
+  for(let attempt=0;attempt<30;attempt++){
+    const shuffled=shuffle(edges);
+    edges.splice(0,edges.length,...shuffled);
+    const result=solve(full,new Set());
+    if(result)return result.map(([i,j])=>{
+      const a=edges[i],b=edges[j];
+      return {a,b,rests:players.filter(p=>![...a,...b].includes(p.id)).map(p=>p.id)};
+    });
+  }
+  return [];
 }
 
 export default function BilliardsPage(){
@@ -66,7 +68,7 @@ export default function BilliardsPage(){
   const [rounds,setRounds]=useState<Round[]>([]);
   const [activeRound,setActiveRound]=useState(1);
   const [selectedGlobals,setSelectedGlobals]=useState<string[]>([]);
-  const [roundsToGenerate,setRoundsToGenerate]=useState(8);
+  const [roundsToGenerate,setRoundsToGenerate]=useState(0);
   const [editingPlayer,setEditingPlayer]=useState<string|null>(null);
   const [editingName,setEditingName]=useState("");
   const [session,setSession]=useState<any>(null);
@@ -156,7 +158,8 @@ export default function BilliardsPage(){
 
   const current=matches.find(m=>m.round===activeRound);
   const started=rounds.length>0;
-  useEffect(()=>{if(!started&&players.length>=4)setRoundsToGenerate(Math.max(1,players.length));},[players.length,started]);
+  const suggestedRounds=useMemo(()=>players.length>=4?Math.floor((players.length*(players.length-1)/2)/2):0,[players.length]);
+  useEffect(()=>{if(!started)setRoundsToGenerate(suggestedRounds);},[suggestedRounds,started]);
   const standings=useMemo(()=>[...players].sort((a,b)=>b.wins-a.wins||((b.ballsFor-b.ballsAgainst)-(a.ballsFor-a.ballsAgainst))||b.ballsFor-a.ballsFor||a.name.localeCompare(b.name)),[players]);
   const playerName=(id:string)=>players.find(p=>p.id===id)?.name??globalPlayers.find(p=>p.id===id)?.name??"Participant";
   const played=matches.filter(m=>m.done).length;
@@ -189,48 +192,27 @@ export default function BilliardsPage(){
   async function generateRounds(count:number){
     if(!isAdmin||players.length<4||started||count<1)return;
     setBusy(true);setNotice("");
-    let simulated=players.map(p=>({...p}));
-    const generated:Pairing[]=[];
-    const historical:Match[]=[...matches].sort((a,b)=>a.round-b.round);
-    for(let n=0;n<count;n++){
-      const p=createPairing(simulated,historical);
-      if(!p)break;
-      generated.push(p);
-      simulated=simulated.map(x=>({...x,rests:x.rests+(p.rests.includes(x.id)?1:0),played:x.played+([...p.a,...p.b].includes(x.id)?1:0)}));
-      historical.push({id:"sim-"+n,round:(historical.at(-1)?.round||0)+1,roundId:"",a:p.a,b:p.b,scoreA:0,scoreB:0,winner:null,blackEarly:false,blackTeam:null,done:false});
-    }
-    if(generated.length<count){setBusy(false);setNotice("No es poden completar totes les rondes sense repetir parelles. Amb "+players.length+" participants només es poden generar "+generated.length+" rondes amb parelles úniques. Redueix el nombre de rondes o afegeix participants.");return;}
-    if(!generated.length){setBusy(false);setNotice("No s'han pogut generar rondes amb aquests participants.");return;}
+    const schedule=createSchedule(players);
+    if(!schedule.length){setBusy(false);setNotice("No s'ha pogut construir un calendari sense repetir parelles. Torna-ho a provar.");return;}
+    const generated=schedule.slice(0,Math.min(count,schedule.length));
+    if(generated.length<count){setBusy(false);setNotice("El màxim calendari vàlid per a "+players.length+" participants és de "+schedule.length+" rondes. No es crearan rondes amb parelles repetides.");return;}
     const {data:roundRows,error:roundError}=await db.from("tournament_rounds").insert(generated.map((_,i)=>({tournament_id:TOURNAMENT_ID,round_number:i+1,status:"scheduled"}))).select("id,round_number");
     if(roundError||!roundRows){setBusy(false);setNotice(roundError?.message||"No s'han pogut crear les rondes.");return;}
     const idByNumber=new Map(roundRows.map((r:any)=>[r.round_number,r.id]));
-    const matchPayload=generated.map((p,i)=>({round_id:idByNumber.get(i+1),table_number:1,status:"scheduled"}));
-    const {data:matchRows,error:matchError}=await db.from("tournament_matches").insert(matchPayload).select("id,round_id");
-    if(matchError||!matchRows){
-      await db.from("tournament_rounds").delete().in("id",roundRows.map((r:any)=>r.id));
-      setBusy(false);setNotice(matchError?.message||"Error creant les partides.");return;
-    }
-    const links:any[]=[];
-    const resting:any[]=[];
+    const {data:matchRows,error:matchError}=await db.from("tournament_matches").insert(generated.map((_,i)=>({round_id:idByNumber.get(i+1),table_number:1,status:"scheduled"}))).select("id,round_id");
+    if(matchError||!matchRows){await db.from("tournament_rounds").delete().in("id",roundRows.map((r:any)=>r.id));setBusy(false);setNotice(matchError?.message||"Error creant les partides.");return;}
+    const links:any[]=[],resting:any[]=[];
     generated.forEach((p,i)=>{
-      const roundId=idByNumber.get(i+1);
-      const match=matchRows.find((m:any)=>m.round_id===roundId);
+      const roundId=idByNumber.get(i+1),match=matchRows.find((m:any)=>m.round_id===roundId);
       if(!match)return;
       p.a.forEach((id,pos)=>links.push({match_id:match.id,participant_id:id,side:"A",position_in_side:pos+1}));
       p.b.forEach((id,pos)=>links.push({match_id:match.id,participant_id:id,side:"B",position_in_side:pos+1}));
       p.rests.forEach(id=>resting.push({round_id:roundId,participant_id:id}));
     });
-    const [linkRes,restRes]=await Promise.all([
-      db.from("tournament_match_participants").insert(links),
-      resting.length?db.from("tournament_round_resting").insert(resting):Promise.resolve({error:null} as any)
-    ]);
-    if(linkRes.error||restRes.error){
-      await db.from("tournament_rounds").delete().in("id",roundRows.map((r:any)=>r.id));
-      setBusy(false);setNotice(linkRes.error?.message||restRes.error?.message||"Error guardant els descansos.");return;
-    }
+    const [linkRes,restRes]=await Promise.all([db.from("tournament_match_participants").insert(links),db.from("tournament_round_resting").insert(resting)]);
+    if(linkRes.error||restRes.error){await db.from("tournament_rounds").delete().in("id",roundRows.map((r:any)=>r.id));setBusy(false);setNotice(linkRes.error?.message||restRes.error?.message||"Error guardant els descansos.");return;}
     await db.from("tournaments").update({status:"in_progress"}).eq("id",TOURNAMENT_ID);
-    setBusy(false);setNotice("Totes les rondes s'han generat i guardat a la base de dades.");
-    await load();
+    setBusy(false);setNotice("Calendari generat: "+generated.length+" rondes, sense repetir cap parella.");await load();
   }
 
   async function nextRound(){
@@ -327,11 +309,11 @@ export default function BilliardsPage(){
         {isAdmin&&!started&&<div className="participant-picker"><div className="picker-actions"><b>Selecciona qui jugarà</b><div><button type="button" className="mini" onClick={()=>setSelectedGlobals(globalPlayers.filter(p=>!players.some(x=>x.id===p.id)).map(p=>p.id))}>Tots</button><button type="button" className="mini" onClick={()=>setSelectedGlobals([])}>Netejar</button></div></div><div className="picker-list">{globalPlayers.filter(p=>!players.some(x=>x.id===p.id)).map(p=><label className="picker-option" key={p.id}><input type="checkbox" checked={selectedGlobals.includes(p.id)} onChange={e=>setSelectedGlobals(old=>e.target.checked?[...old,p.id]:old.filter(id=>id!==p.id))}/><span>{p.name}</span></label>)}</div><button className="primary picker-submit" onClick={addPlayers} disabled={!selectedGlobals.length||busy}>Afegir seleccionats ({selectedGlobals.length}) +</button></div>}
         {isAdmin&&globalPlayers.length===0&&<p className="notice">Afegeix primer participants des de la secció Gestió.</p>}
         <div className="list">{players.length===0?<div className="empty"><strong>Encara no hi ha participants</strong>L'organitzador ha d'inscriure un mínim de quatre persones.</div>:players.map((p,i)=><div className="person" key={p.id}><div className="person-main"><div className="row"><span className="muted">{String(i+1).padStart(2,"0")}</span>{editingPlayer===p.id?<input className="field edit-name" aria-label="Nom del participant" value={editingName} onChange={e=>setEditingName(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")void savePlayerName(p.id);}}/>:<b>{p.name}</b>}</div><small>{p.played} partits · {p.wins}V · {p.losses}D · {p.rests} descansos</small></div>{isAdmin&&<div className="person-actions">{editingPlayer===p.id?<><button className="mini" onClick={()=>void savePlayerName(p.id)} disabled={busy||!editingName.trim()}>Desar</button><button className="mini" onClick={()=>setEditingPlayer(null)}>Cancel·lar</button></>:<button className="mini" onClick={()=>{setEditingPlayer(p.id);setEditingName(p.name);}}>Editar</button>}{!started&&<button className="mini remove" onClick={()=>void removePlayer(p.id)}>Eliminar</button>}</div>}</div>)}</div>
-        {isAdmin&&!started&&players.length>=4&&<p className="notice">El sorteig equilibra els partits jugats, evita repetir torn consecutiu sempre que es pot i prioritza parelles i rivals nous.</p>}
+        {isAdmin&&!started&&players.length>=4&&<p className="notice">El calendari evita repetir company de parella i enfrontaments entre les mateixes dues parelles. Els descansos es reparteixen al llarg del calendari.</p>}
       </section>
       <section className="panel"><div className="roundhead"><h3>Rondes del torneig</h3><span className="tag">{rounds.filter(r=>r.status==="completed").length}/{rounds.length} COMPLETES</span></div>
         {!started?<div className="empty"><strong>Encara no hi ha rondes</strong>Inscriu almenys quatre participants, tria quantes rondes voleu jugar i genera el calendari complet.</div>:<><div className="tabs">{rounds.map(r=><button key={r.id} className={activeRound===r.number?"tab active":"tab"} onClick={()=>setActiveRound(r.number)}>R{r.number}</button>)}</div>{current?<MatchCard key={current.id} match={current} playerName={playerName} isAdmin={isAdmin} onSave={saveResult}/>:<div className="empty">No s'ha trobat la partida d'aquesta ronda.</div>}<div className="notice">Descansen: {players.filter(p=>!current?.a.includes(p.id)&&!current?.b.includes(p.id)).map(p=>p.name).join(", ")||"Ningú"}</div></>}
-        {isAdmin&&!started&&<div style={{display:"flex",gap:8,marginTop:15,alignItems:"center",flexWrap:"wrap"}}><label className="round-count">Rondes (proposta: {players.length}) <input className="field" type="number" min="1" max="60" value={roundsToGenerate} onChange={e=>setRoundsToGenerate(Math.max(1,Math.min(60,Number(e.target.value)||1)))}/></label><button className="primary" disabled={players.length<4||busy} onClick={()=>generateRounds(roundsToGenerate)}>{busy?"Generant…":"Generar totes les rondes →"}</button></div>}
+        {isAdmin&&!started&&<div style={{display:"flex",gap:8,marginTop:15,alignItems:"center",flexWrap:"wrap"}}><label className="round-count">Rondes (màxim recomanat: {suggestedRounds}) <input className="field" type="number" min="1" max="60" value={roundsToGenerate} onChange={e=>setRoundsToGenerate(Math.max(1,Math.min(60,Number(e.target.value)||1)))}/></label><button className="primary" disabled={players.length<4||busy} onClick={()=>generateRounds(roundsToGenerate)}>{busy?"Generant…":"Generar totes les rondes →"}</button></div>}
         {isAdmin&&started&&<div style={{display:"flex",gap:8,marginTop:15,flexWrap:"wrap"}}><button className="primary" disabled={busy||activeRound>=rounds.length} onClick={nextRound}>Següent ronda →</button><button className="secondary" disabled={busy||played===0||tournamentStatus==="completed"} onClick={undoLast}>Desfer últim resultat</button><button className="danger" disabled={busy||tournamentStatus==="completed"} onClick={resetRounds}>Reiniciar rondes ↻</button></div>}
         {isAdmin&&allDone&&tournamentStatus!=="completed"&&<button className="primary" style={{width:"100%",marginTop:12}} disabled={busy} onClick={finalizeTournament}>Tancar torneig i publicar podi</button>}
         {isAdmin&&tournamentStatus==="completed"&&<p className="notice">Podi publicat i punts incorporats a la classificació general.</p>}
