@@ -72,6 +72,16 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    const syncTabFromHash = () => {
+      const target = window.location.hash.replace("#", "");
+      if (["inici", "classificacio", "jocs", "participants", "gestio"].includes(target)) setTab(target as Tab);
+    };
+    syncTabFromHash();
+    window.addEventListener("hashchange", syncTabFromHash);
+    return () => window.removeEventListener("hashchange", syncTabFromHash);
+  }, []);
+
+  useEffect(() => {
     const db = getSupabase();
     if (!db) { setLoading(false); setError("No s'ha pogut inicialitzar Supabase. Revisa les variables d'entorn de Vercel."); return; }
     void load();
