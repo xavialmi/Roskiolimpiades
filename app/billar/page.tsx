@@ -182,10 +182,10 @@ export default function BilliardsPage(){
     const restsByRound=new Map<string,string[]>();
     for(const r of restsRes.data||[])restsByRound.set(r.round_id,[...(restsByRound.get(r.round_id)||[]),r.participant_id]);
     const stats=new Map(selected.map(p=>[p.id,{...p}]));
-    for(const r of roundRows){
+    for(const r of roundRows.filter(r=>r.status==="completed")){
       for(const id of restsByRound.get(r.id)||[]){const p=stats.get(id);if(p)p.rests++;}
     }
-    for(const m of matchRows){for(const id of [...m.a,...m.b]){const p=stats.get(id);if(p)p.played++;}}
+    for(const m of matchRows.filter(m=>m.done)){for(const id of [...m.a,...m.b]){const p=stats.get(id);if(p)p.played++;}}
     for(const m of matchRows.filter(x=>x.done)){
       const winner=m.winner==="A"?m.a:m.b;
       const loser=m.winner==="A"?m.b:m.a;
@@ -292,7 +292,7 @@ export default function BilliardsPage(){
   }
 
   async function saveResult(id:string,scoreA:number,scoreB:number,blackEarly:boolean,blackTeam:"A"|"B"){
-    if(!isAdmin)return;
+    if(!isAdmin||tournamentStatus==="completed")return;
     if(scoreA<0||scoreB<0||scoreA>8||scoreB>8||(!blackEarly&&scoreA===scoreB)){setNotice("Revisa el marcador: ha de ser entre 0 i 8 i no pot acabar empatat.");return;}
     const old=matches.find(m=>m.id===id);if(!old)return;
     const winner:"A"|"B"=blackEarly?(blackTeam==="A"?"B":"A"):(scoreA>scoreB?"A":"B");
@@ -346,7 +346,10 @@ export default function BilliardsPage(){
   }
 
   async function finalizeTournament(){
-    if(!isAdmin||!allDone||tournamentStatus==="completed")return;
+    if(!isAdmin||played===0||tournamentStatus==="completed")return;
+    const pending=matches.length-played;
+    const ok=confirm(pending>0?`Vols finalitzar el joc ara? Quedaran ${pending} partides sense jugar. Només comptaran els resultats ja guardats i les rondes pendents no sumaran punts.`:"Vols finalitzar el joc i publicar la classificació final?");
+    if(!ok)return;
     const existing=await db.from("tournament_awards").select("id").eq("tournament_id",TOURNAMENT_ID).limit(1);
     if(existing.data?.length){setNotice("Aquest torneig ja té un podi publicat. No es duplicaran els punts.");return;}
     const awards:{tournament_id:string;participant_id:string;placement:number}[]=[];
@@ -361,10 +364,14 @@ export default function BilliardsPage(){
     }
     if(!awards.length){setNotice("No hi ha resultats per publicar.");return;}
     setBusy(true);
+    setBusy(true);
     const {error}=await db.from("tournament_awards").insert(awards);
-    if(!error)await db.from("tournaments").update({status:"completed"}).eq("id",TOURNAMENT_ID);
+    if(!error){
+      const {error:statusError}=await db.from("tournaments").update({status:"completed"}).eq("id",TOURNAMENT_ID);
+      if(statusError){setBusy(false);setNotice("El podi s’ha guardat, però no s’ha pogut tancar el torneig: "+statusError.message);await load();return;}
+    }
     setBusy(false);
-    if(error)setNotice(error.message);else{setNotice("Podi publicat. Els punts ja compten a la classificació general.");await load();}
+    if(error)setNotice(error.message);else{setNotice(pending>0?`Joc finalitzat amb ${played} partides disputades. Les ${pending} pendents no compten. Podi publicat i punts incorporats a la classificació general.`:"Podi publicat. Els punts ja compten a la classificació general.");await load();}
   }
 
   return <main className="app">
@@ -394,7 +401,9 @@ export default function BilliardsPage(){
           <div style={{display:"flex",gap:8,flexWrap:"wrap"}}><button className="primary" disabled={busy||activeRound>=rounds.length} onClick={nextRound}>Següent ronda →</button><button className="secondary" disabled={busy||played===0||tournamentStatus==="completed"} onClick={undoLast}>Desfer últim resultat</button><button className="danger" disabled={busy||tournamentStatus==="completed"} onClick={resetRounds}>Reiniciar rondes ↻</button></div>
           {isAdmin&&tournamentStatus!=="completed"&&rounds.length<suggestedRounds&&<div className="participant-picker"><div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:12}}><b>Ampliar el calendari</b><strong>{Math.min(roundsToGenerate, suggestedRounds-rounds.length)} / {suggestedRounds-rounds.length} disponibles</strong></div><input aria-label="Rondes addicionals" type="range" min="1" max={Math.max(1,suggestedRounds-rounds.length)} step="1" value={Math.max(1,Math.min(roundsToGenerate,suggestedRounds-rounds.length))} onChange={e=>setRoundsToGenerate(Number(e.target.value))} style={{width:"100%",accentColor:"var(--accent)"}}/><button className="primary" disabled={busy} onClick={()=>void generateRounds(Math.min(roundsToGenerate,suggestedRounds-rounds.length),true)}>Afegir {Math.min(roundsToGenerate,suggestedRounds-rounds.length)} rondes +</button></div>}
         </div>}
-        {isAdmin&&allDone&&tournamentStatus!=="completed"&&<button className="primary" style={{width:"100%",marginTop:12}} disabled={busy} onClick={finalizeTournament}>Tancar torneig i publicar podi</button>}
+        {isAdmin&&started&&played>0&&tournamentStatus!=="completed"&&<button className="primary" style={{width:"100%",marginTop:12}} disabled={busy} onClick={finalizeTournament}>Finalitzar joc i publicar classificació</button>}
+        {isAdmin&&started&&played===0&&tournamentStatus!=="completed"&&<p className="notice">Per finalitzar el joc cal guardar almenys un resultat.</p>}
+        {tournamentStatus==="completed"&&matches.length>played&&<p className="notice">Joc finalitzat: {played} partides disputades i {matches.length-played} sense jugar. Les pendents no compten a la classificació.</p>}
         {isAdmin&&tournamentStatus==="completed"&&<p className="notice">Podi publicat i punts incorporats a la classificació general.</p>}
       </section>
     </div>}
@@ -416,5 +425,5 @@ export default function BilliardsPage(){
 function MatchCard({match,playerName,isAdmin,onSave}:{match:Match;playerName:(id:string)=>string;isAdmin:boolean;onSave:(id:string,a:number,b:number,black:boolean,blackTeam:"A"|"B")=>void}){
   const [a,setA]=useState(String(match.scoreA));const [b,setB]=useState(String(match.scoreB));const [black,setBlack]=useState(match.blackEarly);const [blackTeam,setBlackTeam]=useState<"A"|"B">(match.blackTeam||"A");
   useEffect(()=>{setA(String(match.scoreA));setB(String(match.scoreB));setBlack(match.blackEarly);setBlackTeam(match.blackTeam||"A");},[match.id,match.scoreA,match.scoreB,match.blackEarly,match.blackTeam]);
-  return <div><div className="teams" style={{padding:"20px 0"}}><div className="team">{playerName(match.a[0])}<br/><span className="muted">+</span><br/>{playerName(match.a[1])}</div><div className="versus">VS</div><div className="team">{playerName(match.b[0])}<br/><span className="muted">+</span><br/>{playerName(match.b[1])}</div></div>{match.done?<div className="empty"><strong>{match.winner==="A"?"Guanya parella A":"Guanya parella B"}</strong>{match.scoreA} – {match.scoreB}{match.blackEarly?" · Negra encaixada prematurament":""}</div>:isAdmin?<><div className="score" style={{justifyContent:"center",margin:"12px 0"}}><label className="muted">Parella A</label><input className="field" type="number" min="0" max="8" inputMode="numeric" value={a} onChange={e=>setA(e.target.value)}/><span className="muted">–</span><input className="field" type="number" min="0" max="8" inputMode="numeric" value={b} onChange={e=>setB(e.target.value)}/><label className="muted">Parella B</label></div><label className="row muted" style={{fontSize:12,marginBottom:12}}><input type="checkbox" checked={black} onChange={e=>setBlack(e.target.checked)}/> Negra encaixada abans d'hora (derrota automàtica)</label>{black&&<div className="row" style={{marginBottom:12}}><span className="muted">Quina parella ha encaixat la negra?</span><select className="field" value={blackTeam} onChange={e=>setBlackTeam(e.target.value as "A"|"B")}><option value="A">Parella A</option><option value="B">Parella B</option></select></div>}<button className="primary" style={{width:"100%"}} onClick={()=>onSave(match.id,Number(a),Number(b),black,blackTeam)}>Guardar resultat</button><p className="notice">Introdueix les boles legals encaixades abans del tir de la negra. La negra no suma ni resta boles.</p></>:<div className="empty">Partida pendent de resultat.</div>}</div>;
+  return <div><div className="teams" style={{padding:"20px 0"}}><div className="team">{playerName(match.a[0])}<br/><span className="muted">+</span><br/>{playerName(match.a[1])}</div><div className="versus">VS</div><div className="team">{playerName(match.b[0])}<br/><span className="muted">+</span><br/>{playerName(match.b[1])}</div></div>{match.done?<div className="empty"><strong>{match.winner==="A"?"Guanya parella A":"Guanya parella B"}</strong>{match.scoreA} – {match.scoreB}{match.blackEarly?" · Negra encaixada prematurament":""}</div>:!isAdmin&&false?null:isAdmin?<><div className="score" style={{justifyContent:"center",margin:"12px 0"}}><label className="muted">Parella A</label><input className="field" type="number" min="0" max="8" inputMode="numeric" value={a} onChange={e=>setA(e.target.value)}/><span className="muted">–</span><input className="field" type="number" min="0" max="8" inputMode="numeric" value={b} onChange={e=>setB(e.target.value)}/><label className="muted">Parella B</label></div><label className="row muted" style={{fontSize:12,marginBottom:12}}><input type="checkbox" checked={black} onChange={e=>setBlack(e.target.checked)}/> Negra encaixada abans d'hora (derrota automàtica)</label>{black&&<div className="row" style={{marginBottom:12}}><span className="muted">Quina parella ha encaixat la negra?</span><select className="field" value={blackTeam} onChange={e=>setBlackTeam(e.target.value as "A"|"B")}><option value="A">Parella A</option><option value="B">Parella B</option></select></div>}<button className="primary" style={{width:"100%"}} onClick={()=>onSave(match.id,Number(a),Number(b),black,blackTeam)}>Guardar resultat</button><p className="notice">Introdueix les boles legals encaixades abans del tir de la negra. La negra no suma ni resta boles.</p></>:<div className="empty">Partida pendent de resultat.</div>}</div>;
 }
