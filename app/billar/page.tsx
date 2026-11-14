@@ -57,16 +57,23 @@ export default function BilliardsPage(){
 
   const load=useCallback(async()=>{
     setLoading(true);
-    const [peopleRes,entriesRes,roundsRes,matchesRes,linksRes,restsRes,tournamentRes]=await Promise.all([
+    const [peopleRes,entriesRes,roundsRes,tournamentRes]=await Promise.all([
       db.from("participants").select("id,display_name").eq("is_active",true).order("display_name"),
       db.from("tournament_entries").select("participant_id,participants!inner(id,display_name)").eq("tournament_id",TOURNAMENT_ID),
       db.from("tournament_rounds").select("id,round_number,status").eq("tournament_id",TOURNAMENT_ID).order("round_number"),
-      db.from("tournament_matches").select("id,round_id,score_a,score_b,winner_side,early_black,black_loser_side,status").order("created_at"),
-      db.from("tournament_match_participants").select("match_id,participant_id,side,position_in_side"),
-      db.from("tournament_round_resting").select("round_id,participant_id"),
       db.from("tournaments").select("status").eq("id",TOURNAMENT_ID).single()
     ]);
-    const err=[peopleRes,entriesRes,roundsRes,matchesRes,linksRes,restsRes,tournamentRes].find(x=>x.error)?.error;
+    const roundIds=(roundsRes.data||[]).map((r:any)=>r.id);
+    const [matchesRes,restsRes]=roundIds.length?await Promise.all([
+      db.from("tournament_matches").select("id,round_id,score_a,score_b,winner_side,early_black,black_loser_side,status").in("round_id",roundIds).order("created_at"),
+      db.from("tournament_round_resting").select("round_id,participant_id").in("round_id",roundIds)
+    ]):[
+      {data:[],error:null} as any,
+      {data:[],error:null} as any
+    ];
+    const matchIds=(matchesRes.data||[]).map((m:any)=>m.id);
+    const actualLinks=matchIds.length?await db.from("tournament_match_participants").select("match_id,participant_id,side,position_in_side").in("match_id",matchIds):{data:[],error:null} as any;
+    const err=[peopleRes,entriesRes,roundsRes,tournamentRes,matchesRes,restsRes,actualLinks].find(x=>x.error)?.error;
     if(err){setNotice(err.message);setLoading(false);return;}
     const people=(peopleRes.data||[]).map((p:any)=>({id:p.id,name:p.display_name}));
     setGlobalPlayers(people);
@@ -74,7 +81,7 @@ export default function BilliardsPage(){
     const roundRows=(roundsRes.data||[]) as any[];
     const roundNumberById=new Map(roundRows.map(r=>[r.id,r.round_number]));
     const grouped=new Map<string,{a:string[];b:string[]}>();
-    for(const link of linksRes.data||[]){
+    for(const link of actualLinks.data||[]){
       const item=grouped.get(link.match_id)||{a:[],b:[]};
       (link.side==="A"?item.a:item.b)[Number(link.position_in_side)-1]=link.participant_id;
       grouped.set(link.match_id,item);
