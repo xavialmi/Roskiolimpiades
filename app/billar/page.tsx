@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";\nimport { createClient } from "@supabase/supabase-js";
 
 type Player = { id:string; name:string; rests:number; wins:number; losses:number; ballsFor:number; ballsAgainst:number };
 type Match = { id:string; round:number; a:[string,string]; b:[string,string]; scoreA:number; scoreB:number; winner:"A"|"B"|null; blackEarly:boolean; done:boolean };
 type Tournament = { players:Player[]; matches:Match[]; round:number; started:boolean; joinCode:string };
-const KEY="roskiolimpiades-bola8-v1";
+const KEY="roskiolimpiades-bola8-v1";\nconst db=createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!,process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!);
 const uid=()=>Math.random().toString(36).slice(2,10);
 const fresh=():Tournament=>({players:[],matches:[],round:0,started:false,joinCode:Math.random().toString(36).slice(2,8).toUpperCase()});
 const shuffle=<T,>(a:T[])=>[...a].sort(()=>Math.random()-.5);
@@ -36,13 +36,13 @@ function createPairing(players:Player[],matches:Match[],round:number){
 }
 
 export default function Home(){
- const [data,setData]=useState<Tournament>(fresh);const [name,setName]=useState("");const [tab,setTab]=useState<"torneig"|"classificacio"|"historial">("torneig");const [loaded,setLoaded]=useState(false);const [roundsToGenerate,setRoundsToGenerate]=useState(8);
- useEffect(()=>{try{const v=localStorage.getItem(KEY);if(v)setData(JSON.parse(v));}catch{}setLoaded(true);},[]);
+ const [data,setData]=useState<Tournament>(fresh);const [selectedGlobal,setSelectedGlobal]=useState("");const [globalPlayers,setGlobalPlayers]=useState<{id:string;name:string}[]>([]);const [tab,setTab]=useState<"torneig"|"classificacio"|"historial">("torneig");const [loaded,setLoaded]=useState(false);const [roundsToGenerate,setRoundsToGenerate]=useState(8);
+ useEffect(()=>{try{const v=localStorage.getItem(KEY);if(v)setData(JSON.parse(v));}catch{}setLoaded(true);db.from("participants").select("id,display_name").eq("is_active",true).order("display_name").then(({data})=>setGlobalPlayers((data||[]).map((p:any)=>({id:p.id,name:p.display_name}))));const channel=db.channel("billar-global-players").on("postgres_changes",{event:"*",schema:"public",table:"participants"},()=>{db.from("participants").select("id,display_name").eq("is_active",true).order("display_name").then(({data})=>setGlobalPlayers((data||[]).map((p:any)=>({id:p.id,name:p.display_name}))));}).subscribe();return()=>{void db.removeChannel(channel);};},[]);
  useEffect(()=>{if(loaded)localStorage.setItem(KEY,JSON.stringify(data));},[data,loaded]);
  const players=data.players;const playerName=(id:string)=>players.find(p=>p.id===id)?.name??"Jugador";
  const current=data.matches.find(m=>m.round===data.round);
  const standings=useMemo(()=>[...players].sort((a,b)=>b.wins-a.wins||((b.ballsFor-b.ballsAgainst)-(a.ballsFor-a.ballsAgainst))||b.ballsFor-a.ballsFor||a.name.localeCompare(b.name)),[players]);
- const addPlayer=()=>{const n=name.trim();if(!n||players.some(p=>p.name.toLowerCase()===n.toLowerCase()))return;setData(d=>({...d,players:[...d.players,{id:uid(),name:n,rests:0,wins:0,losses:0,ballsFor:0,ballsAgainst:0}]}));setName("");};
+ const addPlayer=()=>{const selected=globalPlayers.find(p=>p.id===selectedGlobal);if(!selected||players.some(p=>p.id===selected.id))return;setData(d=>({...d,players:[...d.players,{id:selected.id,name:selected.name,rests:0,wins:0,losses:0,ballsFor:0,ballsAgainst:0}]}));setSelectedGlobal("");};
  const removePlayer=(id:string)=>setData(d=>({...d,players:d.players.filter(p=>p.id!==id)}));
  const nextRound=()=>{if(players.length<4||(current&&!current.done))return;const existing=data.matches.find(m=>m.round===data.round+1);if(existing){setData(d=>({...d,round:d.round+1}));return;}const p=createPairing(players,data.matches,data.round+1);if(!p)return;setData(d=>({...d,round:d.round+1,matches:[...d.matches,p.match],players:d.players.map(x=>p.rests.includes(x.id)?{...x,rests:x.rests+1}:x),started:true}));};\n const generateAllRounds=()=>{if(players.length<4||data.started)return;let simulated=[...players];let generated=[...data.matches];let made=0;for(let r=1;r<=roundsToGenerate;r++){const p=createPairing(simulated,generated,r);if(!p)break;generated.push(p.match);simulated=simulated.map(x=>p.rests.includes(x.id)?{...x,rests:x.rests+1}:x);made++;}if(made>0)setData(d=>({...d,round:1,matches:generated,players:simulated,started:true}));};
  const saveResult=(id:string,scoreA:number,scoreB:number,blackEarly:boolean,blackTeam:"A"|"B")=>{
@@ -64,7 +64,7 @@ export default function Home(){
   <nav className="tabs">{([["torneig","Torneig"],["classificacio","Classificació"],["historial","Historial"]] as const).map(([key,label])=><button key={key} className={tab===key?"tab active":"tab"} onClick={()=>setTab(key)}>{label}</button>)}</nav>
   {tab==="torneig"&&<div className="grid">
    <section className="panel"><div className="roundhead"><h3>Participants <span className="muted">({players.length})</span></h3><span className="tag">ORGANITZADOR</span></div>
-    {!data.started&&<div className="addrow"><input className="field" value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addPlayer()} placeholder="Nom del participant"/><button className="primary" onClick={addPlayer}>Afegir +</button></div>}
+    {!data.started&&<div className="addrow"><select className="field" value={selectedGlobal} onChange={e=>setSelectedGlobal(e.target.value)}><option value="">Selecciona un participant global…</option>{globalPlayers.filter(p=>!players.some(x=>x.id===p.id)).map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select><button className="primary" onClick={addPlayer} disabled={!selectedGlobal}>Afegir +</button></div>{globalPlayers.length===0&&<p className="notice">Primer crea els participants a la secció Participants de la portada.</p>}}
     <div className="list">{players.length===0?<div className="empty"><strong>Encara no hi ha participants</strong>Afegeix un mínim de 4 jugadors per començar.</div>:players.map((p,i)=><div className="person" key={p.id}><div className="row"><span className="muted">{String(i+1).padStart(2,"0")}</span><b>{p.name}</b></div><div className="row"><small>{p.wins}V · {p.losses}D · {p.rests} descansos</small>{!data.started&&<button className="mini" onClick={()=>removePlayer(p.id)}>×</button>}</div></div>)}</div>
     {players.length>=4&&!data.started&&<p className="notice">S'escullen els quatre jugadors amb menys descansos i s'intenten evitar companys i rivals repetits.</p>}
    </section>
