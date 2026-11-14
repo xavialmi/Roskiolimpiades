@@ -7,6 +7,7 @@ export const metadata: Metadata = {
   icons: {
     icon: [{ url: '/roskiolimpiades-icon.svg', type: 'image/svg+xml' }],
     shortcut: [{ url: '/roskiolimpiades-icon.svg', type: 'image/svg+xml' }],
+    apple: [{ url: '/apple-icon', type: 'image/jpeg' }],
   },
 };
 export const viewport: Viewport = { themeColor: '#0c100e', width: 'device-width', initialScale: 1 };
