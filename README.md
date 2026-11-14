@@ -49,21 +49,10 @@ npm install
 npm run dev
 ```
 
-## Crear l'accés d'organitzador
+## Crear l’accés d’organitzador
 
-1. Crea un usuari a Supabase Authentication > Users.
-2. Assigna-li el rol privat d'organitzador a `app_metadata` amb una operació administrativa des de Supabase:
+El primer compte està autoritzat exclusivament per a `xavialmirall4@gmail.com`. Des de **Gestió**, introdueix aquest correu i una contrasenya i prem **Crear el meu compte d’organitzador**. Si Supabase demana confirmació, obre el correu i confirma l’adreça; després inicia sessió. Un trigger privat de la base de dades assigna el rol `app_metadata.role = admin` només a aquest correu. No hi ha registre públic general. Els participants no necessiten comptes per consultar les classificacions.
 
-```sql
-update auth.users
-set raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb) || '{"role":"admin"}'::jsonb
-where email = 'CORREU_DE_L_ORGANITZADOR';
-```
+## Estat de sincronització
 
-3. Inicia sessió a l'apartat **Gestió** de l'aplicació.
-
-No hi ha registre públic. Els participants no necessiten comptes per consultar les classificacions.
-
-## Estat de la sincronització
-
-La plataforma global, les classificacions, el catàleg de jocs i el registre global de participants llegeixen Supabase i escolten canvis en temps real. El mòdul actual de billar conserva encara el seu estat de partides a l'emmagatzematge local del navegador; les taules genèriques de rondes i partides ja estan creades per completar la sincronització del torneig en el següent pas.
+El mòdul de billar desa inscripcions, rondes, partides, resultats, descansos i podi a Supabase. Les vistes públiques s’actualitzen amb Supabase Realtime. La classificació general es recalcula a partir dels podis publicats.
