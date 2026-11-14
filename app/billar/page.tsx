@@ -64,7 +64,6 @@ export default function BilliardsPage(){
   const [activeRound,setActiveRound]=useState(1);
   const [selectedGlobals,setSelectedGlobals]=useState<string[]>([]);
   const [roundsToGenerate,setRoundsToGenerate]=useState(0);
-  const suggestedRounds=useMemo(()=>players.length>=4?Math.floor((players.length*(players.length-1)/2)/2):0,[players.length]);
   const [editingPlayer,setEditingPlayer]=useState<string|null>(null);
   const [editingName,setEditingName]=useState("");
   const [session,setSession]=useState<any>(null);
