@@ -317,7 +317,7 @@ export default function BilliardsPage(){
           <input aria-label="Nombre de rondes" type="range" min="1" max={Math.max(1,suggestedRounds)} step="1" value={Math.min(roundsToGenerate,Math.max(1,suggestedRounds))} onChange={e=>setRoundsToGenerate(Number(e.target.value))} disabled={players.length<4||busy} style={{width:"100%",accentColor:"var(--accent)",cursor:"pointer"}}/>
           <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"var(--muted)"}}><span>1 ronda</span><span>Màxim: {suggestedRounds}</span></div>
           <button className="primary" disabled={players.length<4||busy||suggestedRounds<1} onClick={()=>generateRounds(roundsToGenerate)}>{busy?"Generant…":"Generar "+roundsToGenerate+" rondes →"}</button>
-        </div>}}
+        </div>}
         {isAdmin&&started&&<div style={{display:"flex",gap:8,marginTop:15,flexWrap:"wrap"}}><button className="primary" disabled={busy||activeRound>=rounds.length} onClick={nextRound}>Següent ronda →</button><button className="secondary" disabled={busy||played===0||tournamentStatus==="completed"} onClick={undoLast}>Desfer últim resultat</button><button className="danger" disabled={busy||tournamentStatus==="completed"} onClick={resetRounds}>Reiniciar rondes ↻</button></div>}
         {isAdmin&&allDone&&tournamentStatus!=="completed"&&<button className="primary" style={{width:"100%",marginTop:12}} disabled={busy} onClick={finalizeTournament}>Tancar torneig i publicar podi</button>}
         {isAdmin&&tournamentStatus==="completed"&&<p className="notice">Podi publicat i punts incorporats a la classificació general.</p>}
