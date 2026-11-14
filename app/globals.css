@@ -57,3 +57,7 @@
 .management-participant>span{min-width:0;overflow-wrap:anywhere;flex:1}
 .management-participant .participant-edit-input{flex:1}
 @media(max-width:520px){.participant-card{align-items:flex-start}.participant-edit-actions{justify-content:flex-end}.management-participant{flex-wrap:wrap}}
+
+
+.management-participant .participant-delete{color:#ff8f82}
+.management-participant .participant-delete:hover{color:#ffb0a7}
