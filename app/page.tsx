@@ -195,7 +195,7 @@ export default function Home() {
   return <main className="shell">
     <header className="site-header">
       <a className="brand" href="#" onClick={e => { e.preventDefault(); setTab("inici"); }}>
-        <img className="brand-mark-image" src="/roskiolimpiades-icon.jpg" alt="Roskiolimpiades" />
+        <img className="brand-mark-image" src="/roskiolimpiades-icon.svg" alt="Roskiolimpiades" />
         <span><small>ROSKIOLIMPIADES</small><strong>La competició continua.</strong></span>
       </a>
       <div className="header-right"><span className="live-dot"/> <span>EDICIÓ OBERTA</span></div>
