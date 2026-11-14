@@ -27,7 +27,7 @@ function createPairing(players:Player[],matches:Match[]):Pairing|null {
         const oldPairs=[old.a,old.b];
         for(const team of teams)if(oldPairs.some(x=>pairKey(x[0],x[1])===pairKey(team[0].id,team[1].id)))cost+=12;
         for(const x of teams[0])for(const y of teams[1]){
-          if(oldPairs.some(pair=>pair.includes(x.id)&&pair.includes(y.id)))cost+=3;
+          if((old.a.includes(x.id)&&old.b.includes(y.id))||(old.b.includes(x.id)&&old.a.includes(y.id)))cost+=3;
         }
       }
       if(!best||cost<best.cost)best={chosen,teams,cost};
