@@ -7,7 +7,7 @@
   "theme_color": "#0c100e",
   "icons": [
     {
-      "src": "/roskiolimpiades-logo.jpg",
+      "src": "/roskiolimpiades-icon.jpg",
       "sizes": "256x256",
       "type": "image/jpeg",
       "purpose": "any"
